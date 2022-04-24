@@ -2,105 +2,17 @@ use std::collections::HashMap;
 use bin_rs::io::*;
 use crate::iccprofile::Data::*;
 
-pub fn icc_profile_print(icc_profile :&ICCProfile) -> String {
-    let mut str = icc_profile_header_print(&icc_profile);
-    let header_size = 128;
-    let mut ptr = 0;
-    str += "==== ICC Profiles defined data ====\n";
-    let tags = read_u32_be(&icc_profile.data,ptr);
-    ptr +=  4;
-    str += &format!("Tags {}\n",tags);
-    for _ in 0..tags {
-        let tag_name = read_string(&icc_profile.data,ptr,4);
-        ptr +=  4;
-        let tag_offset = read_u32_be(&icc_profile.data,ptr) as usize - header_size;
-        ptr +=  4;
-        let tag_length = read_u32_be(&icc_profile.data,ptr) as usize;
-        ptr +=  4;
-        str +=  &format!("Tag name {} {}bytes\n",tag_name,tag_length);
-        match &*tag_name {
-            "A2B0" | "A2B1" | "A2B2" | "B2A0" | "B2A1" | "B2A2" => {
-                let ptr = tag_offset;
-                let (data_type,val) = Data::parse(&icc_profile.data[ptr..],tag_length);
-                str += &format!("LUT Table - data_type:{}\n",data_type);
-                str += &val.as_string();
-                str += "\n";
-            },
-            "chad" => {
-                let ptr = tag_offset;
-                let (data_type,val) = Data::parse(&icc_profile.data[ptr..],tag_length);
-                str += &format!("Conversion D65 to D50 - data_type:{}\n",data_type);
-                str += &val.as_string();
-                str += "\n";
-            },
-            "bkpt" => {
-                let ptr = tag_offset;
-                let (data_type,val) = Data::parse(&icc_profile.data[ptr..],tag_length);
-                str += &format!("Media Black Point - data_type:{}\n",data_type);
-                str += &val.as_string();
-                str += "\n\n";
-            },
-
-            "bXYZ" | "gXYZ" | "rXYZ" => {
-                str += "rgb XYZ Tag ";
-                let ptr = tag_offset;
-                let (data_type,val) = Data::parse(&icc_profile.data[ptr..],tag_length);
-                str += &format!("data_type:{}\n",data_type);
-                str += &val.as_string();
-                str += "\n";
-            },
-            "bTRC" | "gTRC" | "rTRC"=> { // bTRC
-                let ptr = tag_offset;
-                let (data_type,val) = Data::parse(&icc_profile.data[ptr..],tag_length);
-                str += &format!("Color tone reproduction curve - data_type:{}\n",data_type);
-                str += &val.as_string();
-                str += "\n\n";
-            },
-            "desc" => {
-                let ptr = tag_offset;
-                let (data_type,val) = Data::parse(&icc_profile.data[ptr..],tag_length);
-                str += &format!("desc - data_type:{}\n",data_type);
-                str += &val.as_string();
-                str += "\n\n";
-            },
-            "cprt" => {
-                let ptr = tag_offset;
-                let (data_type,val) = Data::parse(&icc_profile.data[ptr..],tag_length);
-                str += &format!("cprt - data_type:{}\n",data_type);
-                str += &val.as_string();
-                str += "\n\n";
-            },
-            "wtpt" => {
-                let ptr = tag_offset;
-                let (data_type,val) = Data::parse(&icc_profile.data[ptr..],tag_length);
-                str += &format!("Media white point - data_type:{}\n",data_type);
-                str += &val.as_string();
-                str += "\n";
-            },
-            _ => {
-                let ptr = tag_offset;
-                let (data_type,val) = Data::parse(&icc_profile.data[ptr..],tag_length);
-                str += &format!("{} - data_type:{}\n",tag_name,data_type);
-                str += &val.as_string();
-                str += "\n";
-
-            },
-
-        }
-    }
-    str
-}
-
-pub fn icc_profile_decode(icc_profile :&ICCProfile) -> DecodedICCProfile {
+pub fn icc_profile_decode(data :&Vec<u8>) -> DecodedICCProfile {
+    let icc_profile = ICCProfile::new(data);
     let mut decoded: HashMap<String,Data> = HashMap::new();
     let header_size = 128;
-    let mut ptr = 0;
+    let mut ptr = header_size;
     let tags = read_u32_be(&icc_profile.data,ptr);
     ptr +=  4;
     for _ in 0..tags {
         let tag_name = read_string(&icc_profile.data,ptr,4);
         ptr +=  4;
-        let tag_offset = read_u32_be(&icc_profile.data,ptr) as usize - header_size;
+        let tag_offset = read_u32_be(&icc_profile.data,ptr) as usize;
         ptr +=  4;
         let tag_length = read_u32_be(&icc_profile.data,ptr) as usize;
         ptr +=  4;
@@ -149,6 +61,12 @@ pub struct DecodedICCProfile {
     pub creator: u32,
     pub profile_id: u128,
     pub tags: HashMap<String,Data>,
+}
+impl DecodedICCProfile {
+    pub fn new(buffer :&Vec<u8>) -> Self {
+        icc_profile_decode(buffer)
+    }
+
 }
 
 #[derive(Debug)]
@@ -225,10 +143,7 @@ impl ICCProfile {
         let creator = read_u32_be(&buffer,ptr);
         ptr = ptr + 4;
         let profile_id = read_u128_be(&buffer, ptr);
-        ptr = ptr + 16;
-        let _reserved :Vec<u8> = (0..28).map(|i| buffer[i]).collect();
-        ptr = ptr + 28;
-        let data :Vec<u8> = buffer[ptr..].to_vec();
+//        ptr += 28;  // padding data
 
         let create_date = format!("{:>4}/{:>2}/{:>2} {:>02}:{:>02}:{:>02}",
             year,month,day,hour,minute,second);
@@ -251,32 +166,13 @@ impl ICCProfile {
             creator: creator,
             profile_id: profile_id,
             reserved: Vec::new(),
-            data : data.to_vec(),
+            data : buffer.to_vec(),
         }
     }
 }
 
 
-pub fn icc_profile_header_print(header: &ICCProfile) -> String {
-    let mut str = "=========== ICC Profile ===========\n".to_string();
-    str += &format!("cmmid {}\n",String::from_utf8_lossy(&header.cmmid.to_be_bytes()));
-    str += &format!("version {:08x}\n",&header.version);
-    str += &format!("Device Class {}\n",String::from_utf8_lossy(&header.device_class.to_be_bytes()));
-    str += &format!("Color Space {}\n",String::from_utf8_lossy(&header.color_space.to_be_bytes()));
-    str += &format!("PCS {}\n",String::from_utf8_lossy(&header.pcs.to_be_bytes()));
-    str += &format!("DATE {}\n",header.create_date);
-    str += &format!("It MUST be 'ascp' {}\n",String::from_utf8_lossy(&header.magicnumber_ascp.to_be_bytes()));
-    str += &format!("Platform {}\n",String::from_utf8_lossy(&header.platform.to_be_bytes()));
-    str += &format!("flags {}\n",&header.flags);
-    str += &format!("Manuacture {}\n",String::from_utf8_lossy(&header.manufacturer.to_be_bytes()));
-    str += &format!("Model {:04x}\n",&header.model);
-    str += &format!("Attributes {:>064b}\n",&header.attributes);
-    str += &format!("Illiuminate X:{} Y:{} Z:{}\n",&header.illuminate[0],&header.illuminate[1],&header.illuminate[2]);
-    str += &format!("Creator {}\n",String::from_utf8_lossy(&header.creator.to_be_bytes()));
-    str += &format!("Profile ID (MD5 {:016x})\n",&header.profile_id);
-    str += &format!("Data length {}bytes\n",&header.data.len());
-    str
-}
+
 
 trait IICNumber {
     fn as_f32(&self) -> f32;
@@ -367,6 +263,65 @@ pub struct Mft2 {
     pub output_table: Vec<u16>, 
 }
 
+#[derive(Debug)]
+pub enum Clut {
+    UInt8(Vec<u8>),
+    UInt16(Vec<u16>),
+}
+
+#[derive(Debug)]
+pub struct MbaClut {
+    grid_points: Vec<u8>,   // max 16
+    precision: u8,
+    clut_data: Clut,
+}
+
+
+#[derive(Debug)]
+pub struct Mba {
+    pub input_channels :u8,
+    pub output_channels:u8,
+    pub b_curves: Vec<ParametricCurve>,
+    pub matrix: Vec<S15Fixed16Number>,
+    pub m_curves: Vec<ParametricCurve>,
+    pub clut: MbaClut,
+    pub a_curves: Vec<ParametricCurve>,
+
+}
+
+#[derive(Debug)]
+pub struct ResponseCurveSet16 {
+    pub number_of_channels: u16,
+    pub count_of_measirement_types: u16,
+    pub response_curve_structures: Vec<CurveStructure>,
+}
+
+#[derive(Debug)]
+pub struct Response16Number{
+    encoding_the_interval: u16,
+    reserved: u16,
+    measurement_value:S15Fixed16Number
+}
+
+#[derive(Debug)]
+pub struct CurveStructure {
+    signature: u32,
+    for_each_channel:Vec<u32>,
+    patch_with_the_maximum_colorant_value:Vec<XYZNumber>,
+    response_arrays:Vec<Response16Number>,
+}
+
+#[derive(Debug)]
+pub struct ParametricCurve {
+    funtion_type:u16,
+    vals:Vec<S15Fixed16Number>,
+}
+
+impl ParametricCurve {
+    pub fn len(&self) -> usize {
+        self.vals.len() * 4 + 2
+    }
+}
 
 
 #[derive(Debug)]
@@ -377,14 +332,18 @@ pub enum Data {
     PositionNumber(Box<[u8]>),
     S15Fixed16Number(S15Fixed16Number),
     S15Fixed16NumberArray(Vec<S15Fixed16Number>),
-    ParametricCurve(u16,Vec<S15Fixed16Number>),
+    ParametricCurve(ParametricCurve),
     U16Fixed16Number(U16Fixed16Number),
-    Response16Number(u16,u16,S15Fixed16Number),
+    U16Fixed16NumberArray(Vec<U16Fixed16Number>),
+    Response16Number(Response16Number),
     U1Fixed15Number(U1Fixed15Number),
     U8Fixed8Number(U8Fixed8Number),
     UInt16Number(u16),
+    UInt16NumberArray(Vec<u16>),
     UInt32Number(u32),
+    UInt32NumberArray(Vec<u32>),
     UInt64Number(u64),
+    UInt64NumberArray(Vec<u64>),
     UInt8Number(u8),
     XYZNumber(XYZNumber),
     XYZNumberArray(Vec<XYZNumber>),
@@ -395,6 +354,8 @@ pub enum Data {
     Curve(Vec<u16>),
     Lut8(Mft1),
     Lut16(Mft2),
+    LutBtoA(Mba),
+    ResponseCurveSet16(ResponseCurveSet16),
     None,
 }
 
@@ -405,22 +366,49 @@ impl Data {
         (data_type.clone(),Self::get(&data_type,data,length))
     }
 
+    fn read_parmetic_curve(data:&[u8]) -> ParametricCurve {
+        let mut ptr = 8;
+        let funtion_type = read_u16_be(data,ptr);
+        ptr += 4;
+        let mut vals :Vec<S15Fixed16Number> = vec![];
+        
+        let num = match funtion_type {
+            0 => {
+                1
+            },
+            1 => {
+                3
+            },
+            2 => {
+                4
+            },
+            3 => {
+                5
+            },
+            4 => {
+                7
+            },
+            _ => {  // Error
+                0
+            },
+        };
+
+        for _ in 0..num {
+            vals.push(S15Fixed16Number{
+                integer: read_i16_be(data, ptr),
+                decimal: read_u16_be(data, ptr+2)
+            });
+            ptr += 4;
+        }
+        ParametricCurve{funtion_type,vals}
+    }
+
     pub fn get(data_type:&str,data: &[u8],length:usize) -> Data {
         let len = length - 8;
         let mut ptr = 8;
         match data_type {
             "para" => {
-                let funtion_type = read_u16_be(data,ptr);
-                ptr += 4;
-                let mut vals :Vec<S15Fixed16Number> = vec![];
-                while  ptr < length {
-                    vals.push(S15Fixed16Number{
-                        integer: read_i16_be(data, ptr),
-                        decimal: read_u16_be(data, ptr+2)
-                    });
-                    ptr += 4;
-                }
-                ParametricCurve(funtion_type,vals)
+                ParametricCurve(Self::read_parmetic_curve(data))
             },
             "sig " => {
                 let string = read_ascii_string(data, ptr, 4);
@@ -445,6 +433,41 @@ impl Data {
                     ptr += 4;
                 }
                 S15Fixed16NumberArray(vals)
+            },
+            "uf32" => { //U16Fixed16ArrayType
+                let mut vals :Vec<U16Fixed16Number> = vec![];
+                while  ptr < length {
+                    vals.push(U16Fixed16Number{
+                        integer: read_u16_be(data, ptr),
+                        decimal: read_u16_be(data, ptr+2)
+                    });
+                    ptr += 4;
+                }
+                U16Fixed16NumberArray(vals)
+            },
+            "ui16" => { 
+                let mut vals= vec![];
+                while  ptr < length {
+                    vals.push(read_u16_be(data, ptr));
+                    ptr += 2;
+                }
+                UInt16NumberArray(vals)
+            },
+            "ui32" => { 
+                let mut vals= vec![];
+                while  ptr < length {
+                    vals.push(read_u32_be(data, ptr));
+                    ptr += 4;
+                }
+                UInt32NumberArray(vals)
+            },
+            "ui64" => { 
+                let mut vals= vec![];
+                while  ptr < length {
+                    vals.push(read_u64_be(data, ptr));
+                    ptr += 8;
+                }
+                UInt64NumberArray(vals)
             },
             "text"=> {
                 let string = read_ascii_string(data, ptr,len);
@@ -473,7 +496,7 @@ impl Data {
                 }
                 ChromaticityType(device_number,encoded_value,vals)
             },
-            "mluc" => {
+            "mluc" |"vued" => {
                 let number_of_names = read_u32_be(data,ptr);
                 ptr +=4;
                 let name_recode_size = read_u32_be(data,ptr);
@@ -642,6 +665,158 @@ impl Data {
                     Lut16(mft)
                 }
             },
+            "mBA " => { // no sample
+                let input_channels= read_byte(data, ptr);
+                ptr +=1;
+                let output_channels = read_byte(data, ptr);
+                ptr +=1;
+                ptr +=2; // with skip padding
+                let offset_b_curve = read_u32_be(data, ptr) as usize;
+                ptr +=4;
+                let offset_matrix = read_u32_be(data, ptr) as usize;
+                ptr +=4;
+                let offset_m_curve = read_u32_be(data, ptr) as usize;
+                ptr +=4;
+                let offset_clut = read_u32_be(data, ptr) as usize;
+                ptr +=4;
+                let offset_a_curve = read_u32_be(data, ptr) as usize;
+
+                let mut b_curves = vec![];
+                let mut m_curves = vec![];
+                let mut a_curves = vec![];
+                let mut matrix = vec![];
+                let clut = vec![];
+
+                let mut ptr = offset_b_curve;
+                for _ in 0..input_channels {
+                    let b_curve = Self::read_parmetic_curve(&data[ptr..]);
+                    ptr += b_curve.len();
+                    b_curves.push(b_curve);
+                }
+                let mut ptr = offset_matrix;
+                for _ in 0..12 {
+                    let e = S15Fixed16Number {
+                        integer: read_i16_be(data, ptr),
+                        decimal: read_u16_be(data, ptr+2)
+                    };
+                    matrix.push(e);
+                    ptr += 4;
+                }
+                let mut ptr = offset_m_curve;
+                for _ in 0..input_channels {
+                    let m_curve = Self::read_parmetic_curve(&data[ptr..]);
+                    ptr += m_curve.len();
+                    m_curves.push(m_curve);
+                }
+                let mut ptr = offset_clut;
+
+                let mut grid_points = vec![];
+                let mut clut_size = output_channels as usize;
+                for _ in 0..16 {
+                    let grid_point = read_byte(&data,ptr);
+                    clut_size *= grid_point as usize;
+                    grid_points.push(grid_point);
+                    ptr += 1;
+                }
+                let precision = read_byte(&data,ptr);
+                ptr += 1;
+                let clut_data = if precision == 1 {
+                    let mut clut_entries = vec![];
+                    for _ in 0..clut_size {
+                        clut_entries.push(read_byte(data, ptr));
+                        ptr += 1;
+                    }
+                    Clut::UInt8(clut)
+                } else {
+                    let mut clut_entries = vec![];
+                    for _ in 0..clut_size {
+                        clut_entries.push(read_u16_be(data, ptr));
+                        ptr += 2;
+                    }
+                    Clut::UInt8(clut)
+                };
+
+                let clut = MbaClut {
+                    grid_points,
+                    precision,
+                    clut_data,
+                };
+
+                let mut ptr = offset_a_curve;
+                for _ in 0..input_channels {
+                    let a_curve = Self::read_parmetic_curve(&data[ptr..]);
+                    ptr += a_curve.len();
+                    a_curves.push(a_curve);
+                }
+                LutBtoA(Mba{
+                    input_channels,
+                    output_channels,
+                    b_curves,
+                    matrix,
+                    m_curves,
+                    clut,
+                    a_curves,
+                })
+
+
+            },
+            "rcs2" => {
+                let number_of_channels = read_u16_be(data, ptr);
+                ptr += 2;
+                let count_of_measirement_types = read_u16_be(data, ptr);
+                let mut count_relative_offsets = vec![];
+                for _ in 0..count_of_measirement_types {
+                    count_relative_offsets.push(read_u32_be(data, ptr));
+                    ptr += 4;
+                }
+                let mut response_curve_structures = vec![];
+                for offset in count_relative_offsets {
+                    let mut offset = offset as usize;
+                    let signature = read_u32_be(data,offset);
+                    offset += 4;
+                    let mut for_each_channel = vec![];
+                    for _ in 0..number_of_channels {
+                        let val = read_u32_be(data,offset);
+                        offset += 4;
+                        for_each_channel.push(val);
+                    }
+                    let mut patch_with_the_maximum_colorant_value = vec![];
+                    for _ in 0..number_of_channels {
+                        let val = Self::xyz_number(data, offset);
+                        offset += 12;
+                        patch_with_the_maximum_colorant_value.push(val);                        
+                    }
+                    let mut response_arrays = vec![];
+                    for _ in 0..number_of_channels {
+                        let encoding_the_interval = read_u16_be(data, offset);
+                        offset += 2;
+                        let reserved = read_u16_be(data, offset);
+                        offset += 2;
+                        let measurement_value = S15Fixed16Number {
+                            integer: read_i16_be(data, offset),
+                            decimal: read_u16_be(data, offset+2)
+                        };
+                        offset += 4;
+                        response_arrays.push(Response16Number{
+                            encoding_the_interval,
+                            reserved,
+                            measurement_value,
+                        });
+                    }
+                    response_curve_structures.push(CurveStructure{
+                        signature,
+                        for_each_channel,
+                        patch_with_the_maximum_colorant_value,
+                        response_arrays,
+                    });
+                }
+                Self::ResponseCurveSet16(ResponseCurveSet16{
+                    number_of_channels,
+                    count_of_measirement_types,
+                    response_curve_structures,
+                })
+            },
+
             _ => { // no impl
                 Self::None
             }
@@ -672,8 +847,8 @@ impl Data {
                 }
                 str.to_string()
             },
-            ParametricCurve(funtion_type,vals) => {
-                let mut str = match funtion_type {
+            ParametricCurve(prametic_curve) => {
+                let mut str = match prametic_curve.funtion_type {
                     0x000 => {"function Y = X**ganma\n"},
                     0x001 => {"function Y = (aX+b)**ganma (X >= -b/a), Y = 0 (X < -b/a)\n"},
                     0x002 => {"function Y = (aX+b)**ganma + c(X >= -b/a), Y = c (X < -b/a)\n"},
@@ -681,7 +856,7 @@ impl Data {
                     0x004 => {"function Y = (aX+b)**ganma + e(X >= d), Y = cX + f (X < d)\n"},
                     _ => {"function Unknown"},
                 }.to_string();
-                for f in vals {
+                for f in &prametic_curve.vals {
                     str += &f.as_f32().to_string();
                     str += " ";
                 }
@@ -690,8 +865,8 @@ impl Data {
             U16Fixed16Number(f) => {
                 f.as_f32().to_string()
             },
-            Response16Number(v1,v2,f) => {
-                format!("{} {} {}",v1,v2,f.as_f32())              
+            Response16Number(v) => {
+                format!("{} {} {}",v.encoding_the_interval,v.reserved,v.measurement_value.as_f32())              
             },
             U1Fixed15Number(f) => {
                 f.as_f32().to_string()
@@ -766,6 +941,35 @@ impl Data {
 
                 str + "\n"
             },
+            ResponseCurveSet16(response_curve_structures) => {
+                let mut str = "".to_string();
+                str += &format!("number_of_channels {} count_of_measirement_types{}\n",
+                    response_curve_structures.number_of_channels,
+                    response_curve_structures.count_of_measirement_types);
+                
+                    for curve_structure in &response_curve_structures.response_curve_structures {
+                        let sig = read_ascii_string(&curve_structure.signature.to_be_bytes(),0,4);
+
+                        str += &format!("{}\n",sig);
+                        
+                        for each in &curve_structure.for_each_channel {
+                            str += &format!("{} ",each)
+                        }
+                        str += "\n";
+
+                        for xyz in &curve_structure.patch_with_the_maximum_colorant_value {
+                            str += &format!("X:{} Y:{} Z:{} ",xyz.x.as_f32(),xyz.y.as_f32(),xyz.z.as_f32())
+                        }
+                        str += "\n";
+
+                        for respose in &curve_structure.response_arrays {
+                            str += &format!("{:?} ",respose)
+                        }
+                        str += "\n";
+                    }
+
+                str + "\n"
+            }
 
             ASCII(string) => {
                 string.to_string()
