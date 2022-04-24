@@ -1,0 +1,9 @@
+[package]
+name = "icc_profile"
+version = "0.0.1"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bin-rs = {version = "0.0.7",features = ["util"]}
