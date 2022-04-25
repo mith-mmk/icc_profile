@@ -22,7 +22,7 @@ pub fn icc_profile_decode(data :&Vec<u8>) -> Result<DecodedICCProfile> {
         ptr +=  4;
         let tag_length = read_u32_be(&icc_profile.data,ptr) as usize;
         ptr +=  4;
-        let (_,val) = Data::parse(&icc_profile.data[tag_offset..],tag_length)?;
+        let (_,val) = Data::parse(&icc_profile.data[tag_offset..],tag_length,icc_profile.version)?;
         decoded.insert(tag_name,val);
     }
     Ok(DecodedICCProfile {
@@ -457,9 +457,67 @@ impl Descriptor{
     }
 }
 
+#[derive(Debug)]
+pub struct LocalizedUnicode{
+    pub lang: String,
+    pub country: String,
+    pub unicode_string : String,
+}
+
+impl LocalizedUnicode {
+    pub fn as_string(&self) -> String {
+        self.unicode_string.to_string()
+    }
+}
+
+#[derive(Debug)]
+pub struct MultiLocalizedUnicodeType{
+    pub unicode_strings : Vec<LocalizedUnicode>,
+}
+
+impl MultiLocalizedUnicodeType {
+    pub fn as_string(&self) -> String {
+        if self.unicode_strings.len() > 0 {
+            self.unicode_strings[0].unicode_string.to_string()
+        } else {
+            "".to_string()
+        }
+    }
+
+    pub fn from(ascii: String) -> Self {
+        let unicode_string = LocalizedUnicode{
+            lang: "C".to_string(),
+            country: "".to_string(),
+            unicode_string: ascii,
+        };
+        let unicode_strings = vec![unicode_string];
+        Self {
+            unicode_strings
+        }
+    }
+
+    pub fn list_string(&self) -> String {
+        let mut str = "".to_string();
+        for unicode_string in &self.unicode_strings{
+            str += &format!("[{}_{}] {}\n",unicode_string.lang,unicode_string.country,unicode_string.as_string());
+        }
+        str.to_string()
+    }
+}
+
+#[derive(Debug)]
+pub struct ProfileDescription {
+    pub device_manufacturer:u32,
+    pub device_model:u32,
+    pub device_attributes:String,
+    pub technology_information:u32,
+    pub description_device_manufacturer: MultiLocalizedUnicodeType,
+    pub description_device_model: MultiLocalizedUnicodeType,
+}
 
 #[derive(Debug)]
 pub enum Data {
+    Raw(String,Vec<u8>), // no decodee
     // General ICC 3.2
     DataTimeNumber(DateTime),
     U16Fixed16Number(U16Fixed16Number),
@@ -470,14 +528,14 @@ pub enum Data {
     UInt8Number(u8),
     XYZNumber(XYZNumber),
 
+    ASCII(String),
+    Binary(Vec<u8>),
+
 
     Float32Number(f32),
     PositionNumber(PositionNumber),
     S15Fixed16Number(S15Fixed16Number),
     S15Fixed16NumberArray(Vec<S15Fixed16Number>),
-    ParametricCurve(ParametricCurve),
-    FormulaCurve(FormulaCurve),
-    SampledCurve(Vec<f32>),
     U16Fixed16NumberArray(Vec<U16Fixed16Number>),
     Response16Number(Response16Number),
     U1Fixed15Number(U1Fixed15Number),
@@ -486,26 +544,30 @@ pub enum Data {
     UInt64NumberArray(Vec<u64>),
     UInt8NumberArray(Vec<u8>),
     XYZNumberArray(Vec<XYZNumber>),
-    Chromaticity(ChromaticityType),
-    MultiLocalizedUnicode(u32,u32,String,String,String),
-    ViewConditions(ViewingConditions),
 
     // Type ICC 3.2
+//    OldNamedColor(NamedColorType), // obsolute
     Curve(Vec<u16>),
-    // data
-    ASCII(String),
-    Binary(Vec<u8>),
+    ParametricCurve(ParametricCurve),
     Lut8(Mft1),
     Lut16(Mft2),
+    Chromaticity(ChromaticityType),
+    MultiLocalizedUnicode(MultiLocalizedUnicodeType),
+    ViewConditions(ViewingConditions),
     Measurement(MeasurementType),
-    NamedColor(NamedColor2Type), // noimpl
+    CurveSet(CurveSetType),
+    ProfileDescription(Vec<ProfileDescription>),
+
+    // Type ICC 4.0
+    FormulaCurve(FormulaCurve),
+    SampledCurve(Vec<f32>),
+    NamedColor(NamedColor2Type),
     Descriptor(Descriptor),
     LutBtoA(Mba),
     ResponseCurveSet16(ResponseCurveSet16),
     CrdInfo(Vec<String>),
     ColorantTable(ColorantTableType),
     MultiProcessElements(MultiProcessElementsType),
-    CurveSet(CurveSetType),
     OneDimenstionalCurves(OneDimensionalCurvesType),
     MatrixElement(MatrixElement),
     None,
@@ -527,9 +589,9 @@ fn illuminant_type_string(measurement_illuminate: u32) -> String {
 }
 
 impl Data {
-    pub fn parse(data: &[u8],length:usize) -> Result<(String,Data)> {
+    pub fn parse(data: &[u8],length:usize,version:u32) -> Result<(String,Data)> {
         let data_type = Self::read_data_type(data,0)?;
-        Ok((data_type.clone(),Self::get(&data_type,data,length)?))
+        Ok((data_type.clone(),Self::get(&data_type,data,length,version)?))
     }
 
     fn read_parmetic_curve(data:&[u8]) -> Result<ParametricCurve> {
@@ -598,7 +660,56 @@ impl Data {
         }
         Ok(FormulaCurve{funtion_type,vals})
     }
-    pub fn get(data_type:&str,data: &[u8],length:usize) -> Result<Data> {
+
+    fn read_localization(data:&[u8],ptr:usize,_version:u32) -> Result<LocalizedUnicode> {
+        let mut ptr = ptr;
+        bound_check(data, ptr, 12)?;
+        let _ = read_u32_be(data,ptr);  // MUST 12
+        ptr +=4;
+        let lang = read_ascii_string(data,ptr,2);
+        ptr +=2;
+        let country = read_ascii_string(data,ptr,2);
+        ptr +=2;
+        let name_length = read_u32_be(data,ptr) as usize;
+        ptr +=4;
+        let name_offset = read_u32_be(data,ptr) as usize;
+//        ptr +=4;
+        let mut len = 0;
+        bound_check(data, name_offset, name_length)?;
+        let mut vals = vec![];
+        while len < name_length {
+            let val = read_u16_be(data, name_offset + len);
+            if val == 0 {
+                break;
+            }
+            vals.push(val);
+            len += 2;
+        }
+        let unicode_string = String::from_utf16_lossy(&vals);
+        let mult = LocalizedUnicode {
+            lang,
+            country,
+            unicode_string
+        };
+        Ok(mult)
+    }
+
+    fn read_multi_localization(data:&[u8],ptr:usize,version:u32) -> Result<MultiLocalizedUnicodeType>{
+        let mut ptr = ptr;
+        bound_check(data, ptr, 20)?;
+        let number_of_names = read_u32_be(data,ptr) as usize;
+        ptr +=4;
+        let mut unicode_strings = Vec::with_capacity(number_of_names);
+        for _ in 0..number_of_names {
+            let string =Self::read_localization(data, ptr, version)?;
+            unicode_strings.push(string);
+        }
+        Ok(MultiLocalizedUnicodeType {
+            unicode_strings
+        })
+    }
+
+    pub fn get(data_type:&str,data: &[u8],length:usize,version:u32) -> Result<Data> {
         let len = length - 8;
         let mut ptr = 8;
         bound_check(data,ptr, len)?;
@@ -677,37 +788,41 @@ impl Data {
                 Ok(Self::ASCII(string))
             },
             "desc" => {
-                let counts = read_u32_be(data, ptr) as usize;
-                ptr +=4;
-                bound_check(data,ptr,counts)?;
-                let ascii_string = read_ascii_string(data, ptr+4,counts);
-                ptr += counts;
-                bound_check(data,ptr,8)?;
-                let lang = read_ascii_string(data, ptr,4);
-                ptr += 4;
-                let counts = read_u32_be(data, ptr) as usize;
-                ptr +=4;
-                bound_check(data,ptr,counts)?;
-                // Unicode
-                let mut len = 0;
-                let mut vals = vec![];
-                while len < counts {
-                    let val = read_u16_be(data, ptr);
-                    if val == 0 {
+                if version >= 0x40000000 {
+                    let counts = read_u32_be(data, ptr) as usize;
+                    ptr +=4;
+                    bound_check(data,ptr,counts)?;
+                    let ascii_string = read_ascii_string(data, ptr+4,counts);
+                    ptr += counts;
+                    bound_check(data,ptr,8)?;
+                    let lang = read_ascii_string(data, ptr,4);
+                    ptr += 4;
+                    let counts = read_u32_be(data, ptr) as usize;
+                    ptr +=4;
+                    bound_check(data,ptr,counts)?;
+                    // Unicode
+                    let mut len = 0;
+                    let mut vals = vec![];
+                    while len < counts {
+                        let val = read_u16_be(data, ptr);
+                        if val == 0 {
                         break;
+                        }
+                        vals.push(val);
+                        ptr += 2;
+                        len += 2;
                     }
-                    vals.push(val);
-                    ptr += 2;
-                    len += 2;
-                }
-                let local_string = String::from_utf16_lossy(&vals);
-                Ok(Descriptor(Descriptor{
+                    let local_string = String::from_utf16_lossy(&vals);
+                    Ok(Descriptor(Descriptor{
                         ascii_string,
                         lang,
                         local_string,
                         // Macintosh Profile
-                    })
-                )
+                    }))
+                } else {
+                    let ascii_string = read_ascii_string(data, ptr+4,len-4);
+                    Ok(ASCII(ascii_string))
+                }
             }, 
             "chrm" => {
                 let device_number = read_u16_be(data,ptr);
@@ -734,40 +849,10 @@ impl Data {
                     }))
             },
             "mluc" |"vued" => {
-                bound_check(data, ptr, 20)?;
-                let number_of_names = read_u32_be(data,ptr);
-                ptr +=4;
-                let name_recode_size = read_u32_be(data,ptr);
-                ptr +=4;
-                let first_name_language_code = read_ascii_string(data,ptr,2);
-                ptr +=2;
-                let first_name_country_code = read_ascii_string(data,ptr,2);
-                ptr +=2;
-                let lang = first_name_language_code + "_" + &first_name_country_code;
-                let name_length = read_u32_be(data,ptr) as usize;
-                ptr +=4;
-                let name_offset = read_u32_be(data,ptr) as usize;
-                ptr +=4;
-                let mut len = 0;
-                bound_check(data, name_offset, name_length)?;
-                let mut vals = vec![];
-                while len < name_length {
-                    let val = read_u16_be(data, name_offset + len);
-                    if val == 0 {
-                        break;
-                    }
-                    vals.push(val);
-                    len += 2;
-                }
-                let string = String::from_utf16_lossy(&vals);
-                let mut vals = vec![];
-                while ptr < name_offset {
-                    let val = read_u16_be(data, ptr);
-                    vals.push(val);
-                    ptr += 2;
-                }
-                let more_string = String::from_utf16_lossy(&vals);
-                Ok(MultiLocalizedUnicode(number_of_names,name_recode_size,lang,string,more_string))
+
+                Ok(MultiLocalizedUnicode(
+                    Self::read_multi_localization(data,ptr,version)?
+                ))
 
             },
             "view" => {
@@ -924,7 +1009,7 @@ impl Data {
                     Ok(Lut16(mft))
                 }
             },
-            "mBA " => { // no sample
+            "mBA " => { // no sample 4.0
                 bound_check(data, ptr,32)?;
 
                 let input_channels= read_byte(data, ptr);
@@ -1279,16 +1364,103 @@ impl Data {
                     entries,
                 }))
             }
-            _ => { // no impl
-                // "clut" 
-                // "bACS"
-                // "eACS"
-                // "ncol" // obsolute
-                // "pseq" // 3.2
-                // "scrn" // 3.2
-                // "bfd " // 3.2
+            "pseq" => {
+                bound_check(data,ptr,4)?;
+                let counts = read_u32_be(data, ptr) as usize;
+                ptr += 4;
+                bound_check(data,ptr,counts)?;
+                let mut remain = length - ptr;
+                let mut profiles = vec![];
+                for _ in 0..counts {
+                    bound_check(data,ptr,20)?;
+                    if remain <= 0 {break;}
+                    let device_manufacturer = read_u32_be(data, ptr);
+                    ptr += 4;
+                    let device_model = read_u32_be(data, ptr);
+                    ptr += 4;
+                    let device_attributes = read_ascii_string(data, ptr,8);
+                    ptr += 8;
+                    let technology_information = read_u32_be(data, ptr);
+                    ptr += 4;
+                    remain -=20;
+                    let _tag = read_u32_be(data, ptr); // dmnd
+                    ptr += 4;
+                    let len = read_u32_be(data, ptr) as usize;
+                    ptr += 4;
+                    bound_check(data, ptr, len)?;
+                    let (_,res) = Self::parse(&data[ptr..],len, version)?;
+                    let description_device_manufacturer;
+                    match res {
+                        ASCII(text) => {
+                            description_device_manufacturer = MultiLocalizedUnicodeType::from(text);
 
-                Ok(Self::None)
+                        },
+                        MultiLocalizedUnicode(mlut) => {
+                            description_device_manufacturer = mlut;
+                        }
+                        _ => {
+                            description_device_manufacturer = MultiLocalizedUnicodeType::from("".to_string());
+                        }
+                    }
+                    ptr += len;
+                    let _tag = read_u32_be(data, ptr); // dmnd
+                    ptr += 4;
+                    let len = read_u32_be(data, ptr) as usize;
+                    ptr += 4;
+                    bound_check(data, ptr, len)?;
+                    let (_,res) = Self::parse(&data[ptr..],len, version)?;
+                    let description_device_model;
+                    match res {
+                        ASCII(text) => {
+                            description_device_model = MultiLocalizedUnicodeType::from(text);
+
+                        },
+                        MultiLocalizedUnicode(mlut) => {
+                            description_device_model = mlut;
+                        }
+                        _ => {
+                            description_device_model = MultiLocalizedUnicodeType::from("".to_string());
+                        }
+                    }
+                    profiles.push(ProfileDescription{
+                        device_manufacturer,
+                        device_model,
+                        device_attributes,
+                        technology_information,
+                        description_device_manufacturer,
+                        description_device_model,
+                    })
+                }
+                Ok(ProfileDescription(profiles))
+            }
+
+            _ => { // Data type
+                // no impl
+
+                // "ncol" // 3.2 obsolute?
+                // "scrn" // 3.2 obsolute 4.0?
+                // "clut" // 4.0
+                // "bACS" // 4.0
+                // "eACS" // 4.0
+
+                // "dict" // 5.0
+                // "ehim" // 5.0
+                // "enim" // 5.0
+                // "fl16" // 5.0
+                // "fl32" // 5.0
+                // "fl64" // 5.0
+                // "gbd " // 5.0
+                // "mAB " // 5.0
+                // "smat" // 5.0
+                // "svcn" // 5.0
+                // "tary" // 5.0
+                // "tstr" // 5.0
+                // "utf8" // 5.0
+                // "zut8" // 5.0
+                // "zxml" // 5.0
+
+                let raw = read_bytes_as_vec(data, ptr, len);
+                Ok(Raw(data_type.to_string(),raw))
             }
         }
 
@@ -1636,6 +1808,13 @@ impl Data {
             },
             Curve(curve) => {
                 let str = format!("Curve table size {}\n",curve.len());
+                str
+            },
+            MultiLocalizedUnicode(mult) => {
+                mult.list_string()
+            },
+            Raw(data_type,data) => {
+                let str = format!("Unimplement data type {} length {}bytes\n",data_type,data.len());
                 str
             }
             None => {
