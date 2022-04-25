@@ -141,6 +141,8 @@ pub fn icc_profile_print(icc_profile :&ICCProfile,verbose:usize) -> Result<Strin
     Ok(str)
 }
 
+/// decoded_print to String ICC Profile data
+/// - verbose > 0  very very long information
 
 pub fn decoded_print(header :&DecodedICCProfile,verbose:usize) -> Result<String> {
     let mut str = "=========== ICC Profile ===========\n".to_string();

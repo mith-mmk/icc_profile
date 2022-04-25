@@ -1688,7 +1688,7 @@ impl Data {
                     lut.input_table_enteries,
                     lut.output_table_enteries);
 
-                str += &format!("input table size {} clut values {}  output table size {}|\n",
+                str += &format!("input table size {} clut values {}  output table size {}\n",
                     lut.input_table.len(),lut.clut_values.len(),lut.output_table.len());
                 if verbose > 0 {
                     let len = lut.input_table.len() / lut.input_channels as usize;
@@ -1814,8 +1814,11 @@ impl Data {
                 mult.list_string()
             },
             Raw(data_type,data) => {
-                let str = format!("Unimplement data type {} length {}bytes\n",data_type,data.len());
-                str
+                if verbose == 0 {
+                    format!("Unimplement data type {} length {}bytes\n",data_type,data.len())
+                } else {
+                    format!("Unimplement data type {} {:?}\n",data_type,data)
+                }
             }
             None => {
                 "None".to_string()
