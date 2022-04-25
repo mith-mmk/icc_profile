@@ -1,14 +1,20 @@
 use std::collections::HashMap;
+use std::io::{Error,ErrorKind};
+use std::io::Result;
 use bin_rs::io::*;
+use bin_rs::Endian;
 use crate::iccprofile::Data::*;
+use crate::utils::bound_check;
 
-pub fn icc_profile_decode(data :&Vec<u8>) -> DecodedICCProfile {
-    let icc_profile = ICCProfile::new(data);
+pub fn icc_profile_decode(data :&Vec<u8>) -> Result<DecodedICCProfile> {
+    let icc_profile = ICCProfile::new(data)?;
+
     let mut decoded: HashMap<String,Data> = HashMap::new();
     let header_size = 128;
     let mut ptr = header_size;
     let tags = read_u32_be(&icc_profile.data,ptr);
     ptr +=  4;
+    bound_check(&icc_profile.data,ptr,tags as usize * 12)?;
     for _ in 0..tags {
         let tag_name = read_string(&icc_profile.data,ptr,4);
         ptr +=  4;
@@ -16,10 +22,10 @@ pub fn icc_profile_decode(data :&Vec<u8>) -> DecodedICCProfile {
         ptr +=  4;
         let tag_length = read_u32_be(&icc_profile.data,ptr) as usize;
         ptr +=  4;
-        let (_,val) = Data::parse(&icc_profile.data[tag_offset..],tag_length);
+        let (_,val) = Data::parse(&icc_profile.data[tag_offset..],tag_length)?;
         decoded.insert(tag_name,val);
     }
-    DecodedICCProfile {
+    Ok(DecodedICCProfile {
         length : icc_profile.length, 
         cmmid : icc_profile.cmmid,
         version :icc_profile.version,
@@ -38,7 +44,7 @@ pub fn icc_profile_decode(data :&Vec<u8>) -> DecodedICCProfile {
         creator: icc_profile.creator,
         profile_id: icc_profile.profile_id,
         tags: decoded,
-    }
+    })
 }
 
 #[derive(Debug)]
@@ -63,10 +69,9 @@ pub struct DecodedICCProfile {
     pub tags: HashMap<String,Data>,
 }
 impl DecodedICCProfile {
-    pub fn new(buffer :&Vec<u8>) -> Self {
+    pub fn new(buffer :&Vec<u8>) -> Result<Self> {
         icc_profile_decode(buffer)
     }
-
 }
 
 #[derive(Debug)]
@@ -93,61 +98,64 @@ pub struct ICCProfile {
 }
 
 impl ICCProfile {    
-    pub fn new(buffer :&Vec<u8>) -> Self {
+    pub fn new(buffer :&Vec<u8>) -> Result<Self> {
+        if buffer.len() < 128 {
+            return Err(Error::new(ErrorKind::Other,"IICProfile data shotage"))
+        }
         let mut ptr = 0;
         let length = read_u32_be(&buffer,ptr);
-        ptr = ptr + 4;
+        ptr += 4;
         let cmmid = read_u32_be(&buffer,ptr);
-        ptr = ptr + 4;
+        ptr += 4;
         let version = read_u32_be(&buffer,ptr);
-        ptr = ptr + 4;
+        ptr += 4;
         let device_class = read_u32_be(&buffer,ptr);
-        ptr = ptr + 4;
+        ptr += 4;
         let color_space = read_u32_be(&buffer,ptr);
-        ptr = ptr + 4;
+        ptr += 4;
         let pcs = read_u32_be(&buffer,ptr);
-        ptr = ptr + 4;
+        ptr += 4;
         let year = read_u16_be(&buffer,ptr);
-        ptr = ptr + 2;
+        ptr += 2;
         let month = read_u16_be(&buffer,ptr);
-        ptr = ptr + 2;
+        ptr += 2;
         let day = read_u16_be(&buffer,ptr);
-        ptr = ptr + 2;
+        ptr += 2;
         let hour = read_u16_be(&buffer,ptr);
-        ptr = ptr + 2;
+        ptr += 2;
         let minute = read_u16_be(&buffer,ptr);
-        ptr = ptr + 2;
+        ptr += 2;
         let second = read_u16_be(&buffer,ptr);
-        ptr = ptr + 2;
+        ptr += 2;
         let magicnumber_ascp = read_u32_be(&buffer,ptr);
-        ptr = ptr + 4;
+        ptr += 4;
         let platform = read_u32_be(&buffer,ptr);
-        ptr = ptr + 4;
+        ptr += 4;
         let flags = read_u32_be(&buffer,ptr);
-        ptr = ptr + 4;
+        ptr += 4;
         let manufacturer = read_u32_be(&buffer,ptr);
-        ptr = ptr + 4;
+        ptr += 4;
         let model = read_u32_be(&buffer,ptr);
-        ptr = ptr + 4;
+        ptr += 4;
         let attributes = read_u64_be(&buffer,ptr);
-        ptr = ptr + 8;
+        ptr += 8;
         let rendering_intent = read_u32_be(&buffer,ptr);
-        ptr = ptr + 4;
+        ptr += 4;
         let mut illuminate = [0_u32;3];
         illuminate[0] = read_u32_be(&buffer,ptr);
-        ptr = ptr + 4;
+        ptr += 4;
         illuminate[1] = read_u32_be(&buffer,ptr);
-        ptr = ptr + 4;
+        ptr += 4;
         illuminate[2] = read_u32_be(&buffer,ptr);
-        ptr = ptr + 4;
+        ptr += 4;
         let creator = read_u32_be(&buffer,ptr);
-        ptr = ptr + 4;
+        ptr += 4;
         let profile_id = read_u128_be(&buffer, ptr);
 //        ptr += 28;  // padding data
 
         let create_date = format!("{:>4}/{:>2}/{:>2} {:>02}:{:>02}:{:>02}",
             year,month,day,hour,minute,second);
-        Self {
+        Ok(Self {
             length: length,
             cmmid : cmmid,
             version: version,
@@ -167,11 +175,9 @@ impl ICCProfile {
             profile_id: profile_id,
             reserved: Vec::new(),
             data : buffer.to_vec(),
-        }
+        })
     }
 }
-
-
 
 
 trait IICNumber {
@@ -239,6 +245,12 @@ pub struct XYZNumber {
     pub z:S15Fixed16Number
 }
 
+impl XYZNumber {
+    pub fn to_string(&self) -> String {
+        format!("X:{} Y:{} Z:{} ",self.x.as_f32(),self.y.as_f32(),self.z.as_f32())
+    }
+}
+
 #[derive(Debug)]
 pub struct Mft1 {
     pub input_channels :u8,
@@ -297,7 +309,7 @@ pub struct ResponseCurveSet16 {
 }
 
 #[derive(Debug)]
-pub struct Response16Number{
+pub struct Response16Number {
     encoding_the_interval: u16,
     reserved: u16,
     measurement_value:S15Fixed16Number
@@ -323,50 +335,205 @@ impl ParametricCurve {
     }
 }
 
+#[derive(Debug)]
+pub struct FormulaCurve {
+    funtion_type:u16,
+    vals:Vec<f32>,
+}
+
+impl FormulaCurve {
+    pub fn len(&self) -> usize {
+        self.vals.len() * 4 + 2
+    }
+}
+
+#[derive(Debug)]
+pub struct DateTime{
+    year: u32,
+    month: u32,
+    day: u32,
+    hour: u32,
+    minutes: u32,
+    second: u32,
+}
+
+impl DateTime{
+    fn as_string(&self) -> String{
+        format!("{:4}-{:02}-{:02} {:02}:{:02}:{:02}",
+        self.year,self.month,self.day,self.hour,self.minutes,self.second)
+    }
+}
+
+#[derive(Debug)]
+pub struct ColorNameWithData {
+    pub root_color_name: String,
+    pub pcs: [u16;3],
+    pub coordinate: Vec<u16>,
+}
+
+
+#[derive(Debug)]
+pub struct NamedColor2Type {
+    pub vendor_specific_flag: u32,
+    pub prefix_color_name:String,
+    pub suffix_color_name:String,
+    pub entries:Vec<ColorNameWithData>,
+}
+
+#[derive(Debug)]
+pub struct ViewingConditions{
+    pub illuminant: XYZNumber,
+    pub surround: XYZNumber,
+    pub illuminant_type:u32,
+}
+
+#[derive(Debug)]
+pub struct ChromaticityType {
+    pub device_channels: u16,
+    pub encoded_value: u16,
+    pub cie_xy_coordinate_values:Vec<(U16Fixed16Number,U16Fixed16Number)>,
+}  
+
+#[derive(Debug)]
+pub struct MeasurementType{
+    pub standard_observer:u32,
+    pub measurement_backing:XYZNumber,
+    pub measurement_geometry:u32,
+    pub measurement_flare:U16Fixed16Number,
+    pub standard_illuminant: u32,
+}
+
+#[derive(Debug)]
+pub struct ColorantTableType{
+    pub colorant_name:String,
+    pub pcs_values:Vec<[u16;3]>,
+}
+
+#[derive(Debug)]
+pub struct PositionNumber {
+    pub offset:u32,
+    pub size:u32,
+}
+
+#[derive(Debug)]
+pub struct MultiProcessElementsType{
+    pub input_channels: u16,
+    pub output_channels: u16,
+    pub process_element_positions: Vec<PositionNumber>,
+    pub data: Vec<u8>,
+}
+
+#[derive(Debug)]
+pub struct CurveSetType{
+    pub input_channels: u16,
+    pub output_channels: u16,
+    pub curve_positions: Vec<PositionNumber>,
+    pub data: Vec<u8>,
+}
+
+#[derive(Debug)]
+pub struct OneDimensionalCurvesType{
+    pub segments: u16,
+    pub dimensional_curves: Vec<Vec<f32>>,
+}
+
+#[derive(Debug)]
+pub struct MatrixElement{
+    pub input_channels: u16,
+    pub output_channels: u16,
+    pub matrix: Vec<f32>,
+}
+
+#[derive(Debug)]
+pub struct Descriptor{
+    pub ascii_string: String,
+    pub lang: String,
+    pub local_string: String,
+}
+
+impl Descriptor{
+    pub fn to_string(&self) -> String {
+        self.ascii_string.to_string()
+    }
+}
+
 
 #[derive(Debug)]
 pub enum Data {
-    ASCII(String),
-    DataTimeNumber(u32,u32,u32,u32,u32,u32),
+    // General ICC 3.2
+    DataTimeNumber(DateTime),
+    U16Fixed16Number(U16Fixed16Number),
+    U8Fixed8Number(U8Fixed8Number),
+    UInt16Number(u16),
+    UInt32Number(u32),
+    UInt64Number(u64),
+    UInt8Number(u8),
+    XYZNumber(XYZNumber),
+
+
     Float32Number(f32),
-    PositionNumber(Box<[u8]>),
+    PositionNumber(PositionNumber),
     S15Fixed16Number(S15Fixed16Number),
     S15Fixed16NumberArray(Vec<S15Fixed16Number>),
     ParametricCurve(ParametricCurve),
-    U16Fixed16Number(U16Fixed16Number),
+    FormulaCurve(FormulaCurve),
+    SampledCurve(Vec<f32>),
     U16Fixed16NumberArray(Vec<U16Fixed16Number>),
     Response16Number(Response16Number),
     U1Fixed15Number(U1Fixed15Number),
-    U8Fixed8Number(U8Fixed8Number),
-    UInt16Number(u16),
     UInt16NumberArray(Vec<u16>),
-    UInt32Number(u32),
     UInt32NumberArray(Vec<u32>),
-    UInt64Number(u64),
     UInt64NumberArray(Vec<u64>),
-    UInt8Number(u8),
-    XYZNumber(XYZNumber),
+    UInt8NumberArray(Vec<u8>),
     XYZNumberArray(Vec<XYZNumber>),
-    ChromaticityType(u16,u16,Vec<(U16Fixed16Number,U16Fixed16Number)>),
+    Chromaticity(ChromaticityType),
     MultiLocalizedUnicode(u32,u32,String,String,String),
-    ViewCondtions(XYZNumber,XYZNumber,u32),
-    Measurement(u32,XYZNumber,u32,U16Fixed16Number,u32),
+    ViewConditions(ViewingConditions),
+
+    // Type ICC 3.2
     Curve(Vec<u16>),
+    // data
+    ASCII(String),
+    Binary(Vec<u8>),
     Lut8(Mft1),
     Lut16(Mft2),
+    Measurement(MeasurementType),
+    NamedColor(NamedColor2Type), // noimpl
+    Descriptor(Descriptor),
     LutBtoA(Mba),
     ResponseCurveSet16(ResponseCurveSet16),
+    CrdInfo(Vec<String>),
+    ColorantTable(ColorantTableType),
+    MultiProcessElements(MultiProcessElementsType),
+    CurveSet(CurveSetType),
+    OneDimenstionalCurves(OneDimensionalCurvesType),
+    MatrixElement(MatrixElement),
     None,
 }
 
-impl Data {
+fn illuminant_type_string(measurement_illuminate: u32) -> String {
+    let string =match measurement_illuminate {
+        0x00000001 => {"D50"},
+        0x00000002 => {"D65"},
+        0x00000003 => {"D93"},
+        0x00000004 => {"F2"},
+        0x00000005 => {"D55"},
+        0x00000006 => {"A"},
+        0x00000007 => {"Equi-Power (E)"},
+        0x00000008 => {"F8\n"},
+        _ => {"unknown"},
+    };
+    string.to_string()
+}
 
-    pub fn parse(data: &[u8],length:usize) -> (String,Data) {
-        let data_type = Self::read_data_type(data,0);
-        (data_type.clone(),Self::get(&data_type,data,length))
+impl Data {
+    pub fn parse(data: &[u8],length:usize) -> Result<(String,Data)> {
+        let data_type = Self::read_data_type(data,0)?;
+        Ok((data_type.clone(),Self::get(&data_type,data,length)?))
     }
 
-    fn read_parmetic_curve(data:&[u8]) -> ParametricCurve {
+    fn read_parmetic_curve(data:&[u8]) -> Result<ParametricCurve> {
+        bound_check(data,0,4)?;
         let mut ptr = 8;
         let funtion_type = read_u16_be(data,ptr);
         ptr += 4;
@@ -392,7 +559,7 @@ impl Data {
                 0
             },
         };
-
+        bound_check(data,ptr,num * 4)?;
         for _ in 0..num {
             vals.push(S15Fixed16Number{
                 integer: read_i16_be(data, ptr),
@@ -400,28 +567,60 @@ impl Data {
             });
             ptr += 4;
         }
-        ParametricCurve{funtion_type,vals}
+        Ok(ParametricCurve{funtion_type,vals})
     }
 
-    pub fn get(data_type:&str,data: &[u8],length:usize) -> Data {
+    fn read_formula_curve(data:&[u8]) -> Result<FormulaCurve> {
+        bound_check(data,0,4)?;
+        let mut ptr = 8;
+        let funtion_type = read_u16_be(data,ptr);
+        ptr += 4;
+        let mut vals = vec![];
+        
+        let num = match funtion_type {
+            0 => {
+                4
+            },
+            1 => {
+                5
+            },
+            2 => {
+                5
+            },
+            _ => {  // Error
+                0
+            },
+        };
+        bound_check(data,ptr,num * 4)?;
+        for _ in 0..num {
+            vals.push(read_f32(data, ptr, Endian::BigEndian));
+            ptr += 4;
+        }
+        Ok(FormulaCurve{funtion_type,vals})
+    }
+    pub fn get(data_type:&str,data: &[u8],length:usize) -> Result<Data> {
         let len = length - 8;
         let mut ptr = 8;
+        bound_check(data,ptr, len)?;
         match data_type {
             "para" => {
-                ParametricCurve(Self::read_parmetic_curve(data))
+                Ok(ParametricCurve(Self::read_parmetic_curve(data)?))
+            },
+            "parf" => {
+                Ok(FormulaCurve(Self::read_formula_curve(data)?))
             },
             "sig " => {
                 let string = read_ascii_string(data, ptr, 4);
-                ASCII(string)
+                Ok(ASCII(string))
             }
             "XYZ " | "XYZ" => {
                 let mut xyzs :Vec<XYZNumber> = vec![];
                 while  ptr < length {
-                    let xyz = Self::xyz_number(data, ptr);
+                    let xyz = Self::xyz_number(data, ptr)?;
                     xyzs.push(xyz);
                     ptr += 12;
                 }
-                XYZNumberArray(xyzs)
+                Ok(XYZNumberArray(xyzs))
             },
             "sf32" => { //s16Fixed16ArrayType
                 let mut vals :Vec<S15Fixed16Number> = vec![];
@@ -432,7 +631,7 @@ impl Data {
                     });
                     ptr += 4;
                 }
-                S15Fixed16NumberArray(vals)
+                Ok(S15Fixed16NumberArray(vals))
             },
             "uf32" => { //U16Fixed16ArrayType
                 let mut vals :Vec<U16Fixed16Number> = vec![];
@@ -443,7 +642,11 @@ impl Data {
                     });
                     ptr += 4;
                 }
-                U16Fixed16NumberArray(vals)
+                Ok(U16Fixed16NumberArray(vals))
+            },
+            "ui08" => { 
+                let vals= read_bytes_as_vec(data, ptr,len);
+                Ok(UInt8NumberArray(vals))
             },
             "ui16" => { 
                 let mut vals= vec![];
@@ -451,7 +654,7 @@ impl Data {
                     vals.push(read_u16_be(data, ptr));
                     ptr += 2;
                 }
-                UInt16NumberArray(vals)
+                Ok(UInt16NumberArray(vals))
             },
             "ui32" => { 
                 let mut vals= vec![];
@@ -459,7 +662,7 @@ impl Data {
                     vals.push(read_u32_be(data, ptr));
                     ptr += 4;
                 }
-                UInt32NumberArray(vals)
+                Ok(UInt32NumberArray(vals))
             },
             "ui64" => { 
                 let mut vals= vec![];
@@ -467,15 +670,44 @@ impl Data {
                     vals.push(read_u64_be(data, ptr));
                     ptr += 8;
                 }
-                UInt64NumberArray(vals)
+                Ok(UInt64NumberArray(vals))
             },
             "text"=> {
                 let string = read_ascii_string(data, ptr,len);
-                Self::ASCII(string)
+                Ok(Self::ASCII(string))
             },
             "desc" => {
-                let string = read_ascii_string(data, ptr+4,len-4);
-                Self::ASCII(string)
+                let counts = read_u32_be(data, ptr) as usize;
+                ptr +=4;
+                bound_check(data,ptr,counts)?;
+                let ascii_string = read_ascii_string(data, ptr+4,counts);
+                ptr += counts;
+                bound_check(data,ptr,8)?;
+                let lang = read_ascii_string(data, ptr,4);
+                ptr += 4;
+                let counts = read_u32_be(data, ptr) as usize;
+                ptr +=4;
+                bound_check(data,ptr,counts)?;
+                // Unicode
+                let mut len = 0;
+                let mut vals = vec![];
+                while len < counts {
+                    let val = read_u16_be(data, ptr);
+                    if val == 0 {
+                        break;
+                    }
+                    vals.push(val);
+                    ptr += 2;
+                    len += 2;
+                }
+                let local_string = String::from_utf16_lossy(&vals);
+                Ok(Descriptor(Descriptor{
+                        ascii_string,
+                        lang,
+                        local_string,
+                        // Macintosh Profile
+                    })
+                )
             }, 
             "chrm" => {
                 let device_number = read_u16_be(data,ptr);
@@ -494,9 +726,15 @@ impl Data {
                         }));
                     ptr += 8;
                 }
-                ChromaticityType(device_number,encoded_value,vals)
+                Ok(Chromaticity(
+                    ChromaticityType{
+                        device_channels: device_number,
+                        encoded_value: encoded_value,
+                        cie_xy_coordinate_values: vals
+                    }))
             },
             "mluc" |"vued" => {
+                bound_check(data, ptr, 20)?;
                 let number_of_names = read_u32_be(data,ptr);
                 ptr +=4;
                 let name_recode_size = read_u32_be(data,ptr);
@@ -505,12 +743,13 @@ impl Data {
                 ptr +=2;
                 let first_name_country_code = read_ascii_string(data,ptr,2);
                 ptr +=2;
-                let lang = first_name_language_code + "." + &first_name_country_code;
+                let lang = first_name_language_code + "_" + &first_name_country_code;
                 let name_length = read_u32_be(data,ptr) as usize;
                 ptr +=4;
                 let name_offset = read_u32_be(data,ptr) as usize;
                 ptr +=4;
                 let mut len = 0;
+                bound_check(data, name_offset, name_length)?;
                 let mut vals = vec![];
                 while len < name_length {
                     let val = read_u16_be(data, name_offset + len);
@@ -528,45 +767,62 @@ impl Data {
                     ptr += 2;
                 }
                 let more_string = String::from_utf16_lossy(&vals);
-                MultiLocalizedUnicode(number_of_names,name_recode_size,lang,string,more_string)
+                Ok(MultiLocalizedUnicode(number_of_names,name_recode_size,lang,string,more_string))
 
             },
             "view" => {
-                let xyz_ilu = Self::xyz_number(data, ptr);
+                bound_check(data, ptr, 32)?;
+                let illuminant = Self::xyz_number(data, ptr)?;
                 ptr += 12;
-                let xyz_sur = Self::xyz_number(data, ptr);
+                let surround = Self::xyz_number(data, ptr)?;
                 ptr += 12;
-                let ilu_type = read_u32_be(data,ptr);
-                ViewCondtions(xyz_ilu,xyz_sur,ilu_type)              
+                let illuminant_type = read_u32_be(data,ptr);
+                Ok(ViewConditions(
+                    ViewingConditions{
+                        illuminant,
+                        surround,
+                        illuminant_type,
+                    }
+                    ))
             },
             "meas" => {
-                let encoded_value = read_u32_be(data, ptr);
+                bound_check(data, ptr, 28)?;
+                let standard_observer = read_u32_be(data, ptr);
                 ptr += 4;
-                let xyz = Self::xyz_number(data, ptr);
+                let measurement_backing = Self::xyz_number(data, ptr)?;
                 ptr += 12;
                 let measurement_geometry = read_u32_be(data, ptr);
                 ptr += 4;
-                let measurement_flate = U16Fixed16Number{
+                let measurement_flare = U16Fixed16Number{
                     integer: read_u16_be(data, ptr),
                     decimal: read_u16_be(data, ptr+2)
                 };
                 ptr += 4;
 
-                let measurement_illuminate = read_u32_be(data, ptr);
-                Measurement(encoded_value,xyz,measurement_geometry,measurement_flate,measurement_illuminate)
-
+                let standard_illuminant = read_u32_be(data, ptr);
+                Ok(Measurement(
+                    MeasurementType{
+                        standard_observer,
+                        measurement_backing,
+                        measurement_geometry,
+                        measurement_flare,
+                        standard_illuminant
+                }))
             },
             "curv" => {
+                bound_check(data, ptr, 4)?;
                 let mut curv = vec![];
                 let count = read_u32_be(data, ptr) as usize;
                 ptr += 4;
+                bound_check(data, ptr, count * 2)?;
                 for _ in 0..count {
                     curv.push(read_u16_be(data, ptr));
                     ptr += 2;
                 }
-                Curve(curv)
+                Ok(Curve(curv))
             },
             "mft1" | "mft2"  => {         
+                bound_check(data, ptr,52)?;
                 let input_channels= read_byte(data, ptr);
                 ptr +=1;
                 let output_channels = read_byte(data, ptr);
@@ -595,6 +851,7 @@ impl Data {
                     let input_channels_size = input_channels as usize * 256;
                     let output_channels_size = output_channels as usize * 256;
 
+                    bound_check(data, ptr,input_channels_size + clut_size + output_channels_size)?;
                     for _ in 0..input_channels_size {
                         input_table.push(read_byte(data, ptr));
                         ptr += 1;
@@ -621,11 +878,12 @@ impl Data {
                         output_table, 
 
                     };
-                    Lut8(mft)
+                    Ok(Lut8(mft))
                 } else {
                     let mut input_table = vec![];
                     let mut clut_values = vec![];
                     let mut output_table =vec![];
+                    bound_check(data, ptr,4)?;
 
                     let input_table_enteries = read_u16_be(data, ptr);
                     ptr += 2;
@@ -634,6 +892,7 @@ impl Data {
 
                     let input_channels_size = input_channels as usize * input_table_enteries as usize;
                     let output_channels_size = output_channels as usize * output_table_enteries as usize;
+                    bound_check(data, ptr,(input_channels_size + clut_size + output_channels_size) * 2)?;
 
                     for _ in 0..input_channels_size {
                         input_table.push(read_u16_be(data, ptr));
@@ -662,10 +921,12 @@ impl Data {
                         output_table, 
 
                     };
-                    Lut16(mft)
+                    Ok(Lut16(mft))
                 }
             },
             "mBA " => { // no sample
+                bound_check(data, ptr,32)?;
+
                 let input_channels= read_byte(data, ptr);
                 ptr +=1;
                 let output_channels = read_byte(data, ptr);
@@ -689,11 +950,12 @@ impl Data {
 
                 let mut ptr = offset_b_curve;
                 for _ in 0..input_channels {
-                    let b_curve = Self::read_parmetic_curve(&data[ptr..]);
+                    let b_curve = Self::read_parmetic_curve(&data[ptr..])?;
                     ptr += b_curve.len();
                     b_curves.push(b_curve);
                 }
                 let mut ptr = offset_matrix;
+                bound_check(data, ptr,12 *4)?;
                 for _ in 0..12 {
                     let e = S15Fixed16Number {
                         integer: read_i16_be(data, ptr),
@@ -704,11 +966,12 @@ impl Data {
                 }
                 let mut ptr = offset_m_curve;
                 for _ in 0..input_channels {
-                    let m_curve = Self::read_parmetic_curve(&data[ptr..]);
+                    let m_curve = Self::read_parmetic_curve(&data[ptr..])?;
                     ptr += m_curve.len();
                     m_curves.push(m_curve);
                 }
                 let mut ptr = offset_clut;
+                bound_check(data, ptr,16)?;
 
                 let mut grid_points = vec![];
                 let mut clut_size = output_channels as usize;
@@ -722,6 +985,7 @@ impl Data {
                 ptr += 1;
                 let clut_data = if precision == 1 {
                     let mut clut_entries = vec![];
+                    bound_check(data, ptr,clut_size)?;
                     for _ in 0..clut_size {
                         clut_entries.push(read_byte(data, ptr));
                         ptr += 1;
@@ -729,6 +993,7 @@ impl Data {
                     Clut::UInt8(clut)
                 } else {
                     let mut clut_entries = vec![];
+                    bound_check(data, ptr,clut_size * 2)?;
                     for _ in 0..clut_size {
                         clut_entries.push(read_u16_be(data, ptr));
                         ptr += 2;
@@ -744,11 +1009,11 @@ impl Data {
 
                 let mut ptr = offset_a_curve;
                 for _ in 0..input_channels {
-                    let a_curve = Self::read_parmetic_curve(&data[ptr..]);
+                    let a_curve = Self::read_parmetic_curve(&data[ptr..])?;
                     ptr += a_curve.len();
                     a_curves.push(a_curve);
                 }
-                LutBtoA(Mba{
+                Ok(LutBtoA(Mba{
                     input_channels,
                     output_channels,
                     b_curves,
@@ -756,11 +1021,10 @@ impl Data {
                     m_curves,
                     clut,
                     a_curves,
-                })
-
-
+                }))
             },
             "rcs2" => {
+                bound_check(data, ptr, 4)?;
                 let number_of_channels = read_u16_be(data, ptr);
                 ptr += 2;
                 let count_of_measirement_types = read_u16_be(data, ptr);
@@ -772,6 +1036,7 @@ impl Data {
                 let mut response_curve_structures = vec![];
                 for offset in count_relative_offsets {
                     let mut offset = offset as usize;
+                    bound_check(data, offset, number_of_channels as usize * (4 + 12 + 8) + 4)?;
                     let signature = read_u32_be(data,offset);
                     offset += 4;
                     let mut for_each_channel = vec![];
@@ -782,7 +1047,7 @@ impl Data {
                     }
                     let mut patch_with_the_maximum_colorant_value = vec![];
                     for _ in 0..number_of_channels {
-                        let val = Self::xyz_number(data, offset);
+                        let val = Self::xyz_number(data, offset)?;
                         offset += 12;
                         patch_with_the_maximum_colorant_value.push(val);                        
                     }
@@ -810,31 +1075,235 @@ impl Data {
                         response_arrays,
                     });
                 }
-                Self::ResponseCurveSet16(ResponseCurveSet16{
+                Ok(Self::ResponseCurveSet16(ResponseCurveSet16{
                     number_of_channels,
                     count_of_measirement_types,
                     response_curve_structures,
-                })
+                }))
             },
+            "crdi" => {
+                let mut strings = vec![];
+                while ptr < length {
+                    bound_check(data, ptr, 4)?;
+                    let strlen = read_u32_be(data, ptr) as usize;
+                    ptr += 4;
+                    bound_check(data, ptr, strlen)?;
+                    strings.push(read_ascii_string(data, ptr, strlen));
+                    ptr += strlen;
+                }
+                Ok(CrdInfo(strings))
+            },
+            "data" => {
+                bound_check(data, ptr, 4)?;
+                let data_type = read_u32_be(data, ptr) as usize;
+                ptr += 4;
+                bound_check(data, ptr, len-4)?;
+                if data_type  == 0 {
+                    let string = read_ascii_string(data, ptr, len -4);
+                    Ok(ASCII(string))
+                } else {
+                    let raw = read_bytes_as_vec(data, ptr, len -4);
+                    Ok(Binary(raw))
+                }
 
+            },
+            "clro" => {
+                bound_check(data, ptr, 4)?;
+                let counts = read_u32_be(data, ptr) as usize;
+                ptr += 4;
+                let count  = read_u32_be(data, ptr) as usize;
+                bound_check(data, ptr, count)?;
+                let raw = read_bytes_as_vec(data, ptr, counts);
+                Ok(UInt8NumberArray(raw))
+            },
+            "clrt" => {
+                bound_check(data, ptr, 38)?;
+                let counts = read_u32_be(data, ptr) as usize;
+                ptr += 4;
+                let colorant_name = read_ascii_string(data, ptr, 32);
+                ptr += 32;
+                bound_check(data, ptr, counts*6)?;
+                let mut pcs_values: Vec<[u16;3]> = Vec::with_capacity(counts);
+                for _ in 0..counts {
+                    let mut pcs = [0_u16;3];
+                    pcs[0] = read_u16_be(data, ptr);
+                    pcs[1] = read_u16_be(data, ptr+2);
+                    pcs[2] = read_u16_be(data, ptr+4);
+                    ptr += 6;
+                    pcs_values.push(pcs);
+                }
+
+                Ok(ColorantTable(ColorantTableType{colorant_name,pcs_values}))
+
+            },
+            "mpet" => {
+                bound_check(data, ptr, 8)?;
+                let input_channels = read_u16_be(data, ptr);
+                let output_channels = read_u16_be(data, ptr+2);
+                let counts = read_u32_be(data, ptr+4) as usize;
+                ptr += 8;
+                bound_check(data, ptr, counts*8)?;
+                let mut process_element_positions = Vec::with_capacity(counts);
+                for _ in 0..counts {
+                    let offset = read_u32_be(data, ptr);
+                    let size = read_u32_be(data, ptr+4);
+                    ptr += 8;
+                    process_element_positions.push(PositionNumber{offset,size});
+                }
+                let data = read_bytes_as_vec(data,ptr,length - ptr);
+
+                Ok(MultiProcessElements(
+                    MultiProcessElementsType {
+                        input_channels,
+                        output_channels,
+                        process_element_positions,
+                        data
+                    }
+                ))
+            },
+            "cvst" => {
+                bound_check(data, ptr, 4)?;
+                let input_channels = read_u16_be(data, ptr);
+                let output_channels = read_u16_be(data, ptr+2);
+                let counts = input_channels as usize;
+                ptr += 4;
+                bound_check(data, ptr, counts*8)?;
+                let mut curve_positions = Vec::with_capacity(counts);
+                for _ in 0..counts {
+                    let offset = read_u32_be(data, ptr);
+                    let size = read_u32_be(data, ptr+4);
+                    ptr += 8;
+                    curve_positions.push(PositionNumber{offset,size});
+                }
+                let data = read_bytes_as_vec(data,ptr,length - ptr);
+
+                Ok(CurveSet(
+                    CurveSetType {
+                        input_channels,
+                        output_channels,
+                        curve_positions,
+                        data
+                    }
+                ))
+            },
+            "curf" => { // 4.x
+                bound_check(data, ptr, 4)?;
+                let segments = read_u16_be(data, ptr);
+                ptr += 4;   // skip
+                let counts = segments as usize - 1;
+                let mut dimensional_curves = Vec::with_capacity(segments as usize);
+                for _ in 0..segments as usize {
+                    bound_check(data, ptr, counts*4)?;
+                    let mut  break_points = Vec::with_capacity(counts);
+                    for _ in 0..counts {
+                        let float = read_f32(data, ptr, Endian::BigEndian);
+                        ptr += 4;
+                        break_points.push(float);
+                    }
+                    if ptr + counts * 4 > length {break}
+                    dimensional_curves.push(break_points);
+                }
+
+                Ok(OneDimenstionalCurves(
+                    OneDimensionalCurvesType {
+                        segments,
+                        dimensional_curves,
+                    }
+                ))
+            },
+            "samf" => { // 4.x
+                bound_check(data, ptr, 4)?;
+                let counts = read_u16_be(data, ptr) as usize;
+                ptr += 4;   // skip
+                bound_check(data, ptr, counts * 4)?;
+                let mut curve_entries = vec![];
+                for _ in 0..counts {
+                    let float = read_f32(data, ptr, Endian::BigEndian);
+                    ptr += 4;
+                    curve_entries.push(float);
+                }
+                Ok(SampledCurve(curve_entries))
+            },
+            "matf" => { // 4.x
+                bound_check(data, ptr, 4)?;
+                let input_channels = read_u16_be(data, ptr);
+                let output_channels = read_u16_be(data, ptr+2);
+                ptr += 4;
+                let counts = (input_channels as usize + 1) * output_channels as usize;
+                bound_check(data, ptr, counts*4)?;
+                let mut matrix = vec![];
+                for _ in 0..counts {
+                    let float = read_f32(data, ptr, Endian::BigEndian);
+                    ptr += 4;
+                    matrix.push(float);
+                }
+                Ok(MatrixElement(MatrixElement{input_channels,output_channels,matrix}))
+            },
+            "ncl2" => { // ncol obsolute
+                bound_check(data, ptr, 122)?;
+                let vendor_specific_flag = read_u32_be(data, ptr);
+                ptr += 4;
+                let counts = read_u32_be(data, ptr) as usize;
+                ptr += 4;
+                let number_device_coordinates = read_u32_be(data, ptr) as usize;
+                ptr += 4;
+                let prefix_color_name = read_ascii_string(data, ptr,32);
+                ptr += 32;
+                let suffix_color_name = read_ascii_string(data, ptr,32);
+                ptr += 32;
+                let mut entries = vec![];
+                for _ in 0..counts {
+                    bound_check(data, ptr, number_device_coordinates * 2 + 32 + 6)?;
+                    let root_color_name = read_ascii_string(data, ptr,32);
+                    ptr += 32;
+                    let mut pcs = [0_u16;3];
+                    pcs[0] = read_u16_be(data, ptr);
+                    pcs[1] = read_u16_be(data, ptr+2);
+                    pcs[2] = read_u16_be(data, ptr+4);
+                    ptr += 6;
+                    let mut coordinate = vec![];
+                    for _ in 0..number_device_coordinates {
+                        coordinate.push(read_u16_be(data, ptr));
+                        ptr += 2;
+                    }
+                    entries.push(ColorNameWithData{
+                        root_color_name,
+                        pcs,
+                        coordinate,
+                    });
+                }
+                Ok(NamedColor(NamedColor2Type{
+                    vendor_specific_flag,
+                    prefix_color_name,
+                    suffix_color_name,
+                    entries,
+                }))
+            }
             _ => { // no impl
-                Self::None
+                // "clut" 
+                // "bACS"
+                // "eACS"
+                // "ncol" // obsolute
+                // "pseq" // 3.2
+                // "scrn" // 3.2
+                // "bfd " // 3.2
+
+                Ok(Self::None)
             }
         }
 
     }
 
-    pub fn as_string(&self) -> String{
+    pub fn as_string(&self,verbose:usize) -> String{
         match &*self {
-            DataTimeNumber(year,month,day,hour,minutes,second) => {
-                format!("{:4}-{:02}-{:02} {:02}:{:02}:{:02}",
-                    year,month,day,hour,minutes,second)
+            DataTimeNumber(datetime) => {
+                datetime.as_string()
             },
             Float32Number(f) => {
                 f.to_string()
             },
-            PositionNumber(boxed) => {
-                format!("{} bytes..",boxed.len())
+            PositionNumber(position) => {
+                format!("offset {} size {}",position.offset,position.size)
             },
             S15Fixed16Number(f) => {
                 f.as_f32().to_string()
@@ -896,8 +1365,8 @@ impl Data {
                 }
                 str + "\n"
             },
-            ChromaticityType(device_number,encoded_value,vals) => {
-                let encoded = match encoded_value {
+            Chromaticity(chromaticity) => {
+                let encoded = match chromaticity.encoded_value {
                     0x001 => {"ITU-R BT.709"},
                     0x002 => {"SMPTE RP145-1994"},
                     0x003 => {"EBU Tech.3213-E"},
@@ -905,40 +1374,29 @@ impl Data {
                     _ => {"unknown"},
 
                 };
-                let mut str = format!("Number of Device Channels {} {} ",device_number,encoded);
-                for (x,y) in vals {
+                let mut str = format!("Number of Device Channels {} {} ",chromaticity.device_channels,encoded);
+                for (x,y) in &chromaticity.cie_xy_coordinate_values {
                     str += &format!("x:{} y:{} ",x.as_f32(),y.as_f32());
                 }
 
                 str + "\n"
             },
-            Measurement(encoded_value,xyz,measurement_geometry,measurement_flate,measurement_illuminate) => {
-                let mut str = match encoded_value {
+            Measurement(mesaurement) => {
+                let mut str = match mesaurement.standard_observer {
                     0x00000001 => {"Standard Observer: CIE 1931 standard colorimetric observer\n"},
                     0x00000002 => {"Standard Observer: CIE 1964 standard colorimetric observer\n"},
                     _ => {"Standard: Observer unknown\n"},
                 }.to_string();
-                str += &format!("XYZ tristimulus values X:{} Y:{} Z:{}\n",xyz.x.as_f32(),xyz.y.as_f32(),xyz.z.as_f32(),);
+                str += &format!("XYZ tristimulus values {}\n",mesaurement.measurement_backing.to_string());
                 str += "Measurement geometry ";
-                str += match measurement_geometry {
+                str += match mesaurement.measurement_geometry {
                     0x00000001 => {"0/45 or 45/0\n"},
                     0x00000002 => {"0/d or d/0\n"},
                     _ => {"unknown\n"},
                 };
-                str += &format!("Measurement flare {}\n",measurement_flate.as_f32());
+                str += &format!("Measurement flare {}\n",mesaurement.measurement_flare.as_f32());
                 str += "Standard Illuminant: ";
-                str += match measurement_illuminate {
-                    0x00000001 => {"D50\n"},
-                    0x00000002 => {"D65\n"},
-                    0x00000003 => {"D93\n"},
-                    0x00000004 => {"F2\n"},
-                    0x00000005 => {"D55\n"},
-                    0x00000006 => {"A\n"},
-                    0x00000007 => {"Equi-Power (E)\n"},
-                    0x00000008 => {"F8\n"},
-                    _ => {"unknown\n"},
-                };
-
+                str += &illuminant_type_string(mesaurement.standard_illuminant);
                 str + "\n"
             },
             ResponseCurveSet16(response_curve_structures) => {
@@ -974,6 +1432,212 @@ impl Data {
             ASCII(string) => {
                 string.to_string()
             },
+            ViewConditions(condition) => {
+                format!("illuminant {} surround {} type {}",
+                    condition.illuminant.to_string(),
+                    condition.surround.to_string(),
+                    illuminant_type_string(condition.illuminant_type))
+            },
+            Lut8(lut) => {
+                let mut str = format!("Lut8 input #{} output #{} grid {}\n",
+                    lut.input_channels,
+                    lut.output_channels,
+                    lut.number_of_clut_grid_points
+                );
+                let e = &lut.e_params;
+
+                if e.len() > 9 {
+                    str += &format!("|{} {} {}|\n",e[0].as_f32(),e[1].as_f32(),e[2].as_f32());
+                    str += &format!("|{} {} {}|\n",e[3].as_f32(),e[4].as_f32(),e[5].as_f32());
+                    str += &format!("|{} {} {}|\n",e[6].as_f32(),e[7].as_f32(),e[8].as_f32());
+                }
+                str += &format!("input table size {} clut values {}  output table size {}\n",
+                    lut.input_table.len(),lut.clut_values.len(),lut.output_table.len());
+                if verbose > 0 {
+                    let len = lut.input_table.len() / lut.input_channels as usize;
+                    str += &format!("Input table\n");
+                    for j in 0..lut.input_channels as usize {
+                        str += &format!("{:3}: ", j);
+                        for i in 0..len {
+                            str += &format!("{:3} ", lut.input_table[j*len + i]);
+                        }
+                        str += &format!("\n");
+                    }
+                    str += &format!("Clut values\n");
+                    let mut nums = vec![0_usize;lut.input_channels as usize];
+                    let mut i = 0;
+                    while i < lut.clut_values.len() as usize {
+                        let mut current = i / lut.output_channels as usize;
+                        for j in 0..lut.input_channels as usize {
+                            nums[j] = current % lut.number_of_clut_grid_points as usize;
+                            current /= lut.number_of_clut_grid_points as usize;
+                        }
+                        for j in 0..lut.input_channels as usize {
+                            str += &format!("{:3} ",nums[lut.input_channels as usize - j -1 ]);
+                        }
+                        str += ": ";
+
+                        for j in 0..lut.output_channels as usize {
+                            str += &format!("{:3} ",lut.clut_values[i+j]);
+                        }
+
+                        i += lut.output_channels as usize;
+                        str += &format!("\n");
+                    }
+
+                    let len = lut.output_table.len() / lut.output_channels as usize;
+                    str += &format!("\nOutput table\n");
+                    for j in 0..lut.output_channels as usize {
+                        str += &format!("{:3}: ", j);
+                        for i in 0..len {
+                            str += &format!("{:3} ", lut.output_table[j*len + i]);
+                        }
+                        str += &format!("\n");
+                    }
+                }
+
+                str.to_string()
+            }
+            Lut16(lut) => {
+                let mut str = format!("Lut16 input #{} output #{} grid {}\n",
+                    lut.input_channels,
+                    lut.output_channels,
+                    lut.number_of_clut_grid_points
+                );
+                let e = &lut.e_params;
+
+                if e.len() >= 9 {
+                    str += &format!("|{} {} {}|\n",e[0].as_f32(),e[1].as_f32(),e[2].as_f32());
+                    str += &format!("|{} {} {}|\n",e[3].as_f32(),e[4].as_f32(),e[5].as_f32());
+                    str += &format!("|{} {} {}|\n",e[6].as_f32(),e[7].as_f32(),e[8].as_f32());
+                }
+
+                str += &format!("input table entries {} output table entries {}\n",
+                    lut.input_table_enteries,
+                    lut.output_table_enteries);
+
+                str += &format!("input table size {} clut values {}  output table size {}|\n",
+                    lut.input_table.len(),lut.clut_values.len(),lut.output_table.len());
+                if verbose > 0 {
+                    let len = lut.input_table.len() / lut.input_channels as usize;
+                    str += &format!("Input table\n");
+                    for j in 0..lut.input_channels as usize {
+                        str += &format!("{:3}: ", j);
+                        for i in 0..len {
+                            str += &format!("{:5} ", lut.input_table[j*len + i]);
+                        }
+                        str += &format!("\n");
+                    }
+                    str += &format!("Clut values\n");
+                    let mut nums = vec![0_usize;lut.input_channels as usize];
+                    let mut i = 0;
+                    while i < lut.clut_values.len() as usize {
+                        let mut current = i / lut.output_channels as usize;
+                        for j in 0..lut.input_channels as usize {
+                            nums[j] = current % lut.number_of_clut_grid_points as usize;
+                            current /= lut.number_of_clut_grid_points as usize;
+                        }
+                        for j in 0..lut.input_channels as usize {
+                            str += &format!("{:3} ",nums[lut.input_channels as usize - j -1 ]);
+                        }
+                        str += ": ";
+
+                        for j in 0..lut.output_channels as usize {
+                            str += &format!("{:5} ",lut.clut_values[i+j]);
+                        }
+
+                        i += lut.output_channels as usize;
+                        str += &format!("\n");
+                    }
+
+
+                    let len = lut.output_table.len() / lut.output_channels as usize;
+                    str += &format!("\nOutput table\n");
+                    for j in 0..lut.output_channels as usize {
+                        str += &format!("{:3}: ", j);
+                        for i in 0..len {
+                            str += &format!("{:5} ", lut.output_table[j*len + i]);
+                        }
+                        str += &format!("\n");
+                    }
+                }
+                str
+            },
+            LutBtoA(lut) => {
+                let mut str = format!("Lut B to A input #{} output #{}\n",
+                    lut.input_channels, lut.output_channels);
+
+                str += "B Curves\n";
+
+                for curve in &lut.b_curves {
+                    let mut str = match curve.funtion_type {
+                        0x000 => {"function Y = X**ganma\n"},
+                        0x001 => {"function Y = (aX+b)**ganma (X >= -b/a), Y = 0 (X < -b/a)\n"},
+                        0x002 => {"function Y = (aX+b)**ganma + c(X >= -b/a), Y = c (X < -b/a)\n"},
+                        0x003 => {"function Y = (aX+b)**ganma (X >= d), Y = cX (X < d)\n"},
+                        0x004 => {"function Y = (aX+b)**ganma + e(X >= d), Y = cX + f (X < d)\n"},
+                        _ => {"function Unknown"},
+                    }.to_string();
+                    for f in &curve.vals {
+                        str += &f.as_f32().to_string();
+                        str += " ";
+                    }
+                    str += "\n";
+                }
+
+                let e = &lut.matrix;
+                str += "Matrix\n";
+
+                if e.len() >= 12 {
+                    str += &format!("|{} {} {}| |{}|\n",e[0].as_f32(),e[1].as_f32(),e[2].as_f32(),e[9].as_f32() );
+                    str += &format!("|{} {} {}| |{}|\n",e[3].as_f32(),e[4].as_f32(),e[5].as_f32(),e[10].as_f32());
+                    str += &format!("|{} {} {}| |{}|\n",e[6].as_f32(),e[7].as_f32(),e[8].as_f32(),e[11].as_f32());
+                }
+
+                str += "M Curves\n";
+                for curve in &lut.m_curves {
+                    let mut str = match curve.funtion_type {
+                        0x000 => {"function Y = X**ganma\n"},
+                        0x001 => {"function Y = (aX+b)**ganma (X >= -b/a), Y = 0 (X < -b/a)\n"},
+                        0x002 => {"function Y = (aX+b)**ganma + c(X >= -b/a), Y = c (X < -b/a)\n"},
+                        0x003 => {"function Y = (aX+b)**ganma (X >= d), Y = cX (X < d)\n"},
+                        0x004 => {"function Y = (aX+b)**ganma + e(X >= d), Y = cX + f (X < d)\n"},
+                        _ => {"function Unknown"},
+                    }.to_string();
+                    for f in &curve.vals {
+                        str += &f.as_f32().to_string();
+                        str += " ";
+                    }
+                    str += "\n";
+                }
+
+                str += "CLUT\n";
+                let clut = &lut.clut;
+                str += &format!("{} {} {:?}",clut.grid_points.len(),clut.precision,clut.clut_data);
+
+                str += "A Curves\n";
+                for curve in &lut.m_curves {
+                    let mut str = match curve.funtion_type {
+                        0x000 => {"function Y = X**ganma\n"},
+                        0x001 => {"function Y = (aX+b)**ganma (X >= -b/a), Y = 0 (X < -b/a)\n"},
+                        0x002 => {"function Y = (aX+b)**ganma + c(X >= -b/a), Y = c (X < -b/a)\n"},
+                        0x003 => {"function Y = (aX+b)**ganma (X >= d), Y = cX (X < d)\n"},
+                        0x004 => {"function Y = (aX+b)**ganma + e(X >= d), Y = cX + f (X < d)\n"},
+                        _ => {"function Unknown"},
+                    }.to_string();
+                    for f in &curve.vals {
+                        str += &f.as_f32().to_string();
+                        str += " ";
+                    }
+                    str += "\n";
+                }
+
+                str.to_string()
+            },
+            Curve(curve) => {
+                let str = format!("Curve table size {}\n",curve.len());
+                str
+            }
             None => {
                 "None".to_string()
             },
@@ -981,10 +1645,10 @@ impl Data {
                 format!("{:?}",*self)
             }
         }
-
     }
 
-    pub fn xyz_number(data: &[u8],ptr: usize) -> XYZNumber {
+    pub fn xyz_number(data: &[u8],ptr: usize) ->  Result<XYZNumber> {
+        bound_check(data, ptr, 12)?;
         let cie_x = S15Fixed16Number {
             integer: read_i16_be(&data, ptr),
             decimal: read_u16_be(&data, ptr+2)
@@ -997,15 +1661,16 @@ impl Data {
             integer: read_i16_be(&data, ptr+8),
             decimal: read_u16_be(&data, ptr+10)
         };
-        XYZNumber{x:cie_x,y:cie_y,z:cie_z}
+        Ok(XYZNumber{x:cie_x,y:cie_y,z:cie_z})
     }
 
-    pub fn read_data_type(data:&[u8],ptr: usize) -> String {
-        let data_type = read_string(data, ptr as usize, 4);
+    pub fn read_data_type(data:&[u8],ptr: usize) -> Result<String> {
+        bound_check(data, ptr, 4)?;
+        let data_type = read_string(data, ptr, 4);
         if data_type.len() == 0 {
-            return read_string(data, ptr as usize, 3)
+            return Ok(read_string(data, ptr + 1, 3))
         }
-        data_type
+        Ok(data_type)
     }
 }
 
