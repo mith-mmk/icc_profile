@@ -1,6 +1,7 @@
 pub use crate::iccprofile::*;
 pub mod utils;
 pub mod iccprofile;
+pub mod cms;
 
 #[cfg(test)]
 mod tests {

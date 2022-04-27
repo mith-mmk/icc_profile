@@ -180,7 +180,7 @@ impl ICCProfile {
 }
 
 
-trait IICNumber {
+pub trait IICNumber {
     fn as_f32(&self) -> f32;
     fn as_f64(&self) -> f64;
     fn int(&self) -> i32;
@@ -337,8 +337,8 @@ impl ParametricCurve {
 
 #[derive(Debug)]
 pub struct FormulaCurve {
-    funtion_type:u16,
-    vals:Vec<f32>,
+    pub funtion_type:u16,
+    pub vals:Vec<f32>,
 }
 
 impl FormulaCurve {
@@ -381,7 +381,7 @@ pub struct NamedColor2Type {
 }
 
 #[derive(Debug)]
-pub struct ViewingConditions{
+pub struct ViewingConditions {
     pub illuminant: XYZNumber,
     pub surround: XYZNumber,
     pub illuminant_type:u32,
@@ -395,7 +395,7 @@ pub struct ChromaticityType {
 }  
 
 #[derive(Debug)]
-pub struct MeasurementType{
+pub struct MeasurementType {
     pub standard_observer:u32,
     pub measurement_backing:XYZNumber,
     pub measurement_geometry:u32,
@@ -404,7 +404,7 @@ pub struct MeasurementType{
 }
 
 #[derive(Debug)]
-pub struct ColorantTableType{
+pub struct ColorantTableType {
     pub colorant_name:String,
     pub pcs_values:Vec<[u16;3]>,
 }
@@ -416,7 +416,7 @@ pub struct PositionNumber {
 }
 
 #[derive(Debug)]
-pub struct MultiProcessElementsType{
+pub struct MultiProcessElementsType {
     pub input_channels: u16,
     pub output_channels: u16,
     pub process_element_positions: Vec<PositionNumber>,
@@ -424,7 +424,7 @@ pub struct MultiProcessElementsType{
 }
 
 #[derive(Debug)]
-pub struct CurveSetType{
+pub struct CurveSetType {
     pub input_channels: u16,
     pub output_channels: u16,
     pub curve_positions: Vec<PositionNumber>,
@@ -432,33 +432,33 @@ pub struct CurveSetType{
 }
 
 #[derive(Debug)]
-pub struct OneDimensionalCurvesType{
+pub struct OneDimensionalCurvesType {
     pub segments: u16,
     pub dimensional_curves: Vec<Vec<f32>>,
 }
 
 #[derive(Debug)]
-pub struct MatrixElement{
+pub struct MatrixElement {
     pub input_channels: u16,
     pub output_channels: u16,
     pub matrix: Vec<f32>,
 }
 
 #[derive(Debug)]
-pub struct Descriptor{
+pub struct Descriptor {
     pub ascii_string: String,
     pub lang: String,
     pub local_string: String,
 }
 
-impl Descriptor{
+impl Descriptor {
     pub fn to_string(&self) -> String {
         self.ascii_string.to_string()
     }
 }
 
 #[derive(Debug)]
-pub struct LocalizedUnicode{
+pub struct LocalizedUnicode {
     pub lang: String,
     pub country: String,
     pub unicode_string : String,
@@ -471,7 +471,7 @@ impl LocalizedUnicode {
 }
 
 #[derive(Debug)]
-pub struct MultiLocalizedUnicodeType{
+pub struct MultiLocalizedUnicodeType {
     pub unicode_strings : Vec<LocalizedUnicode>,
 }
 
@@ -574,7 +574,7 @@ pub enum Data {
 }
 
 fn illuminant_type_string(measurement_illuminate: u32) -> String {
-    let string =match measurement_illuminate {
+    let string = match measurement_illuminate {
         0x00000001 => {"D50"},
         0x00000002 => {"D65"},
         0x00000003 => {"D93"},
