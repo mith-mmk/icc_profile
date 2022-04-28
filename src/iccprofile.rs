@@ -72,6 +72,15 @@ impl DecodedICCProfile {
     pub fn new(buffer :&Vec<u8>) -> Result<Self> {
         icc_profile_decode(buffer)
     }
+
+    pub fn to_string(&self) -> Result<String> {
+        crate::utils::decoded_print(self,0)
+    }
+
+    pub fn to_string_with_verbose(&self,verbose:usize) -> Result<String> {
+        crate::utils::decoded_print(self,verbose)
+    }
+
 }
 
 #[derive(Debug)]
