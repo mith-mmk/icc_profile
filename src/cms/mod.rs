@@ -3,6 +3,49 @@ use crate::S15Fixed16Number;
 
 pub mod transration;
 
+pub enum ColorEntries {
+    Rgb24(Vec<u8>),
+    Rgba32(Vec<u8>),
+    Lab24(Vec<u8>),
+    Lab(Vec<f32>),
+    Lab48(Vec<u16>),
+    Ymck(Vec<u8>),
+    Xyz(Vec<f32>),
+    Xyz24(Vec<u8>),
+}
+
+impl ColorEntries {
+    pub fn to_rgb(&self) -> Option<Vec<u8>> {
+        None
+    }
+
+    pub fn to_lab(&self) -> Option<Vec<f32>> {
+        None
+    }
+
+    pub fn to_lab24(&self) -> Option<Vec<u8>> {
+        None
+    }
+
+    pub fn to_lab48(&self) -> Option<Vec<u16>> {
+        None
+    }
+
+
+    pub fn to_xyz(&self) -> Option<Vec<f32>> {
+        None
+    }
+
+    pub fn to_xyz24(&self) -> Option<Vec<u8>> {
+        None
+    }
+
+    pub fn to_ymck(&self) -> Option<Vec<f32>> {
+        None
+    }
+
+}
+
 #[derive(Clone)]
 pub struct ColorMatrix3D {
     pub e: [f32;9]

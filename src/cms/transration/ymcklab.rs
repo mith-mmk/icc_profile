@@ -8,8 +8,19 @@ pub enum YMCKLut{
     // None,
 }
 
-// YMCK -> RGB conversion
-pub fn ycmk_rgb_lut16(y:u8,m:u8,c:u8,k:u8,lut:&Mft2) -> (u8,u8,u8) {
+
+// La*b* 0-100 -127-127 -127-127
+pub fn ycmk_lab_lut16_normarize(y:u8,m:u8,c:u8,k:u8,lut:&Mft2) -> (f32,f32,f32) {
+    let (l,a,b) = ycmk_rgb_lut16(y ,m ,c , k,lut: &Mft2)
+    let l = l / 65535.0 * 100;
+    let a = a / 256.0 - 128.0;
+    let b = b / 256.0 - 128.0;
+
+    (l,a,b)
+}
+
+// YMCK -> Lab conversion 0-65536
+pub fn ycmk_lab_lut16(y:u8,m:u8,c:u8,k:u8,lut:&Mft2) -> (f32,f32,f32) {
     let grid_points = lut.number_of_clut_grid_points as usize;
 
     // e_params may not use,because there are for XYZ color space and 3x3 matrix,but the YCMK color space has four channels,
@@ -91,8 +102,18 @@ pub fn ycmk_rgb_lut16(y:u8,m:u8,c:u8,k:u8,lut:&Mft2) -> (u8,u8,u8) {
     (l,a,b)
 }
 
+// La*b* 0-100 -127-127 -127-127
+pub fn ycmk_lab_lut8_normarize(y:f32,m:f32,c:f32,k:f32,lut:&Mft1) -> (f32,f32,f32) {
+    let (l,a,b) = ycmk_rgb_lut8(y ,m ,c , k,lut: &Mft1)
+    let l = l / 2555.0 * 100;
+    let a = a - 128.0;
+    let b = b - 128.0;
+
+    (l,a,b)
+}
+
 // no test
-pub fn ycmk_rgb_lut8(y:u8,m:u8,c:u8,k:u8,lut:&Mft1) -> (u8,u8,u8) {
+pub fn ycmk_to_lab_lut8(y:u8,m:u8,c:u8,k:u8,lut:&Mft1) -> (f32,f32,f32) {
     let grid_points = lut.number_of_clut_grid_points as usize;
 
     let y = lut.input_table [y as usize];
@@ -129,7 +150,7 @@ pub fn ycmk_rgb_lut8(y:u8,m:u8,c:u8,k:u8,lut:&Mft1) -> (u8,u8,u8) {
     (l,a,b)
 }
 
-pub fn ymck_to_lab_entries (buf:&[u8],entries: usize,mode: &YMCKLut) -> Result<Vec<u8>> {
+pub fn ymck_to_lab_entries (buf:&[u8],entries: usize,mode: &YMCKLut) -> Result<Vec<f32>> {
     if buf.len() < entries *4 {
         return Err(Error::new(ErrorKind::Other, "Data shotage"))
     }
@@ -141,24 +162,24 @@ pub fn ymck_to_lab_entries (buf:&[u8],entries: usize,mode: &YMCKLut) -> Result<V
         let x = buf[ptr];
         let y = buf[ptr + 1];
         let z = buf[ptr + 2];
+        let (l,a,b);
         match mode {
-            Lut16(lut) {
-                let (r,g,b) = ycmk_to_lab_lut16(y,m,c,k,lut);
+            Lut16(lut) => {
+                (l,a,b) = ycmk_to_rgb_lut16_normarize(y,m,c,k,lut);
+        
             },
-            Lut8(lut) {
-                let (r,g,b) = ycmk_to_lab_lut8(y,m,c,k,lut);
+            Lut8(lut) =>  {
+                (l,a,b) = ycmk_to_lab_lut8_normarize(y,m,c,k,lut);
             },
-            /*
-            None {
-                let (r,g,b) = ycmk_to_lab(y,m,c,k);
-
-            }*/
+            _ =>  {
+                return Err(Error::new(ErrorKind::Other, "not support"))
+            }
         }
 
-
-        buffer.push(r);
-        buffer.push(g);
+        buffer.push(l);
+        buffer.push(a);
         buffer.push(b);
+
 
     }
 

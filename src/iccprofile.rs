@@ -68,6 +68,7 @@ pub struct DecodedICCProfile {
     pub profile_id: u128,
     pub tags: HashMap<String,Data>,
 }
+
 impl DecodedICCProfile {
     pub fn new(buffer :&Vec<u8>) -> Result<Self> {
         icc_profile_decode(buffer)
