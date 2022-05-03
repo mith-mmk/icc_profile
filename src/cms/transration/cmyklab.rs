@@ -14,7 +14,7 @@ pub fn cmyk_to_lab_lut16_u8(c:u8,m:u8,y:u8,k:u8,lut:&Mft2) -> (u8,u8,u8) {
 }
 
 // YMCK -> Lab conversion 0-65536
-pub fn cmyk_to_lab_lut16(c:u8,m:u8,y:u8,k:u8,lut:&Mft2) -> (f32,f32,f32) {
+pub fn cmyk_to_lab_lut16(c:u8,m:u8,y:u8,k:u8,lut:&Mft2) -> (f64,f64,f64) {
     let grid_points = lut.number_of_clut_grid_points as usize;
 
     // e_params may not use,because there are for XYZ color space and 3x3 matrix,but the YCMK color space has four channels,
@@ -39,25 +39,25 @@ pub fn cmyk_to_lab_lut16(c:u8,m:u8,y:u8,k:u8,lut:&Mft2) -> (f32,f32,f32) {
     let y2 = if y < lut.input_table_enteries as usize - 1 {lut.input_table [y as usize + 1 + lut.input_table_enteries as usize * 2]} else {y1};
     let k2 = if k < lut.input_table_enteries as usize - 1 {lut.input_table [k as usize + 1 + lut.input_table_enteries as usize * 3]} else {k1};
 
-    let c_delta = c_delta as f32 / delta as f32;
-    let m_delta = m_delta as f32 / delta as f32;
-    let y_delta = y_delta as f32 / delta as f32;
-    let k_delta = k_delta as f32 / delta as f32;
+    let c_delta = c_delta as f64 / delta as f64;
+    let m_delta = m_delta as f64 / delta as f64;
+    let y_delta = y_delta as f64 / delta as f64;
+    let k_delta = k_delta as f64 / delta as f64;
 
-    let c = c1 as isize + ((c2 as isize - c1 as isize) as f32 * c_delta) as isize;
-    let m = m1 as isize + ((m2 as isize - m1 as isize) as f32 * m_delta) as isize;
-    let y = y1 as isize + ((y2 as isize - y1 as isize) as f32 * y_delta) as isize;
-    let k = k1 as isize + ((k2 as isize - k1 as isize) as f32 * k_delta) as isize;
+    let c = c1 as isize + ((c2 as isize - c1 as isize) as f64 * c_delta) as isize;
+    let m = m1 as isize + ((m2 as isize - m1 as isize) as f64 * m_delta) as isize;
+    let y = y1 as isize + ((y2 as isize - y1 as isize) as f64 * y_delta) as isize;
+    let k = k1 as isize + ((k2 as isize - k1 as isize) as f64 * k_delta) as isize;
 
-    let c_grid = ((c as f32 / 65536.0) * grid_points as f32).floor() as usize;
-    let m_grid = ((m as f32 / 65536.0) * grid_points as f32).floor() as usize;
-    let y_grid = ((y as f32 / 65536.0) * grid_points as f32).floor() as usize;
-    let k_grid = ((k as f32 / 65536.0) * grid_points as f32).floor() as usize;
+    let c_grid = ((c as f64 / 65536.0) * grid_points as f64).floor() as usize;
+    let m_grid = ((m as f64 / 65536.0) * grid_points as f64).floor() as usize;
+    let y_grid = ((y as f64 / 65536.0) * grid_points as f64).floor() as usize;
+    let k_grid = ((k as f64 / 65536.0) * grid_points as f64).floor() as usize;
 
-    let c_grid_delta = ((c as f32 / 65536.0) * grid_points as f32) - c_grid as f32;
-    let m_grid_delta = ((m as f32 / 65536.0) * grid_points as f32) - m_grid as f32;
-    let y_grid_delta = ((y as f32 / 65536.0) * grid_points as f32) - y_grid as f32;
-    let k_grid_delta = ((k as f32 / 65536.0) * grid_points as f32) - k_grid as f32;
+    let c_grid_delta = ((c as f64 / 65536.0) * grid_points as f64) - c_grid as f64;
+    let m_grid_delta = ((m as f64 / 65536.0) * grid_points as f64) - m_grid as f64;
+    let y_grid_delta = ((y as f64 / 65536.0) * grid_points as f64) - y_grid as f64;
+    let k_grid_delta = ((k as f64 / 65536.0) * grid_points as f64) - k_grid as f64;
 
     let grid_delta = y_grid_delta * m_grid_delta * c_grid_delta * k_grid_delta;
 
@@ -70,19 +70,19 @@ pub fn cmyk_to_lab_lut16(c:u8,m:u8,y:u8,k:u8,lut:&Mft2) -> (f32,f32,f32) {
     let grid2 = c_grid2 * grid_points.pow(3) + m_grid2 * grid_points.pow(2)  + y_grid2 * grid_points + k_grid2;
     let grid2 = grid2 * lut.output_channels as usize;
  
-    let l = lut.clut_values[grid]   as f32 * (1.0  -grid_delta) + lut.clut_values[grid2]   as f32 * grid_delta;
-    let a = lut.clut_values[grid+1] as f32 * (1.0  -grid_delta) + lut.clut_values[grid2+1] as f32 * grid_delta;
-    let b = lut.clut_values[grid+2] as f32 * (1.0  -grid_delta) + lut.clut_values[grid2+2] as f32 * grid_delta;
+    let l = lut.clut_values[grid]   as f64 * (1.0  -grid_delta) + lut.clut_values[grid2]   as f64 * grid_delta;
+    let a = lut.clut_values[grid+1] as f64 * (1.0  -grid_delta) + lut.clut_values[grid2+1] as f64 * grid_delta;
+    let b = lut.clut_values[grid+2] as f64 * (1.0  -grid_delta) + lut.clut_values[grid2+2] as f64 * grid_delta;
     
-    let dev = 65536.0 / (lut.output_table_enteries as f32 -1.0);
+    let dev = 65536.0 / (lut.output_table_enteries as f64 -1.0);
 
     let ol = (l / dev) as usize;
     let oa = (a / dev) as usize;
     let ob = (b / dev) as usize;
 
-    let ol_delta = l / dev - ol as f32;
-    let oa_delta = a / dev - oa as f32;
-    let ob_delta = b / dev - ob as f32;
+    let ol_delta = l / dev - ol as f64;
+    let oa_delta = a / dev - oa as f64;
+    let ob_delta = b / dev - ob as f64;
 
     let l1 = lut.output_table [ol as usize];
     let a1 = lut.output_table [oa as usize + lut.output_table_enteries as usize];
@@ -91,19 +91,19 @@ pub fn cmyk_to_lab_lut16(c:u8,m:u8,y:u8,k:u8,lut:&Mft2) -> (f32,f32,f32) {
     let a2 = if a1 < lut.output_table_enteries - 1 {lut.output_table[oa as usize + 1 + lut.output_table_enteries as usize]} else {a1};
     let b2 = if b1 < lut.output_table_enteries - 1 {lut.output_table[ob as usize + 1 + lut.output_table_enteries as usize * 2]} else {b1};
 
-    let l = l1 as f32 * (1.0 - ol_delta) + l2 as f32 * ol_delta;
-    let a = a1 as f32 * (1.0 - oa_delta) + a2 as f32 * oa_delta;
-    let b = b1 as f32 * (1.0 - ob_delta) + b2 as f32 * ob_delta;
+    let l = l1 as f64 * (1.0 - ol_delta) + l2 as f64 * ol_delta;
+    let a = a1 as f64 * (1.0 - oa_delta) + a2 as f64 * oa_delta;
+    let b = b1 as f64 * (1.0 - ob_delta) + b2 as f64 * ob_delta;
 
     (l,a,b)
 }
 
 // La*b* 0-100 -127-127 -127-127
-pub fn cmyk_to_lab_lut8(c:u8,m:u8,y:u8,k:u8,lut:&Mft1) -> (f32,f32,f32) {
+pub fn cmyk_to_lab_lut8(c:u8,m:u8,y:u8,k:u8,lut:&Mft1) -> (f64,f64,f64) {
     let (l,a,b) = cmyk_to_lab_lut8_u8(c ,m ,y , k,lut);
-    let l = l as f32 / 255.0 * 100.0;
-    let a = a as f32 - 128.0;
-    let b = b as f32 - 128.0;
+    let l = l as f64 / 255.0 * 100.0;
+    let a = a as f64 - 128.0;
+    let b = b as f64 - 128.0;
     
     (l,a,b)
 }
@@ -117,14 +117,14 @@ pub fn cmyk_to_lab_lut8_u8(c:u8,m:u8,y:u8,k:u8,lut:&Mft1) -> (u8,u8,u8) {
     let y = lut.input_table [y as usize + 256 * 2];
     let k = lut.input_table [k as usize + 256 * 3];
 
-    let c_grid = ((y as f32 / 256.0) * grid_points as f32).floor() as usize;
-    let m_grid = ((m as f32 / 256.0) * grid_points as f32).floor() as usize;
-    let y_grid = ((c as f32 / 256.0) * grid_points as f32).floor() as usize;
-    let k_grid = ((k as f32 / 256.0) * grid_points as f32).floor() as usize;
-    let c_grid_delta = ((y as f32 / 256.0) * grid_points as f32) - c_grid as f32;
-    let m_grid_delta = ((m as f32 / 256.0) * grid_points as f32) - m_grid as f32;
-    let y_grid_delta = ((c as f32 / 256.0) * grid_points as f32) - y_grid as f32;
-    let k_grid_delta = ((k as f32 / 256.0) * grid_points as f32) - k_grid as f32;
+    let c_grid = ((y as f64 / 256.0) * grid_points as f64).floor() as usize;
+    let m_grid = ((m as f64 / 256.0) * grid_points as f64).floor() as usize;
+    let y_grid = ((c as f64 / 256.0) * grid_points as f64).floor() as usize;
+    let k_grid = ((k as f64 / 256.0) * grid_points as f64).floor() as usize;
+    let c_grid_delta = ((y as f64 / 256.0) * grid_points as f64) - c_grid as f64;
+    let m_grid_delta = ((m as f64 / 256.0) * grid_points as f64) - m_grid as f64;
+    let y_grid_delta = ((c as f64 / 256.0) * grid_points as f64) - y_grid as f64;
+    let k_grid_delta = ((k as f64 / 256.0) * grid_points as f64) - k_grid as f64;
     let grid_delta = c_grid_delta * m_grid_delta * y_grid_delta * k_grid_delta;
 
     let grid = c_grid * grid_points.pow(3) + m_grid * grid_points.pow(2)  + y_grid * grid_points + k_grid;
@@ -136,9 +136,9 @@ pub fn cmyk_to_lab_lut8_u8(c:u8,m:u8,y:u8,k:u8,lut:&Mft1) -> (u8,u8,u8) {
     let grid2 = c_grid2 * grid_points.pow(3) + m_grid2 * grid_points.pow(2)  + y_grid2 * grid_points + k_grid2;
     let grid2 = grid2 * lut.output_channels as usize;
  
-    let l = lut.clut_values[grid]   as f32 * (1.0  -grid_delta) + lut.clut_values[grid2]   as f32 * grid_delta;
-    let a = lut.clut_values[grid+1] as f32 * (1.0  -grid_delta) + lut.clut_values[grid2+1] as f32 * grid_delta;
-    let b = lut.clut_values[grid+2] as f32 * (1.0  -grid_delta) + lut.clut_values[grid2+2] as f32 * grid_delta;
+    let l = lut.clut_values[grid]   as f64 * (1.0  -grid_delta) + lut.clut_values[grid2]   as f64 * grid_delta;
+    let a = lut.clut_values[grid+1] as f64 * (1.0  -grid_delta) + lut.clut_values[grid2+1] as f64 * grid_delta;
+    let b = lut.clut_values[grid+2] as f64 * (1.0  -grid_delta) + lut.clut_values[grid2+2] as f64 * grid_delta;
     let l = lut.output_table[(l as usize).clamp(0,255)];
     let a = lut.output_table[(a as usize + 256).clamp(0,255)];
     let b = lut.output_table[(b  as usize + 512).clamp(0,255)];
@@ -146,7 +146,7 @@ pub fn cmyk_to_lab_lut8_u8(c:u8,m:u8,y:u8,k:u8,lut:&Mft1) -> (u8,u8,u8) {
     (l,a,b)
 }
 
-pub fn ymck_to_lab_entries_lut16(buf:&[u8],entries: usize,lut:&Mft2) -> Result<Vec<f32>> {
+pub fn ymck_to_lab_entries_lut16(buf:&[u8],entries: usize,lut:&Mft2) -> Result<Vec<f64>> {
     if buf.len() < entries *4 {
         return Err(Error::new(ErrorKind::Other, "Data shotage"))
     }
@@ -171,7 +171,7 @@ pub fn ymck_to_lab_entries_lut16(buf:&[u8],entries: usize,lut:&Mft2) -> Result<V
     Ok(buffer)
 }
 
-pub fn mcyk_to_lab_entries_lut8(buf:&[u8],entries: usize,lut:&Mft1) -> Result<Vec<f32>> {
+pub fn mcyk_to_lab_entries_lut8(buf:&[u8],entries: usize,lut:&Mft1) -> Result<Vec<f64>> {
     if buf.len() < entries *4 {
         return Err(Error::new(ErrorKind::Other, "Data shotage"))
     }

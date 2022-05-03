@@ -36,7 +36,18 @@ impl RGBToXYZCoefficient {
     }
 }
 
-pub fn rgb_to_xyz_entries_f32 (buf:&[u8],entries: usize,mode: &RGBToXYZCoefficient) -> Result<Vec<f32>> {
+pub fn rgb_to_xyz(r:u8,g:u8,b:u8) -> (f64,f64,f64) {
+    let matrix = RGBToXYZCoefficient::SrgbD65.get();
+    matrix.convert_3d_u8_f64(r, g, b)
+}
+
+pub fn rgb_to_xyz_from_f64(r:f64,g:f64,b:f64) -> (f64,f64,f64) {
+    let matrix = RGBToXYZCoefficient::SrgbD65.get();
+    matrix.convert_3d(r, g, b)
+}
+
+
+pub fn rgb_to_xyz_entries_f64 (buf:&[u8],entries: usize,mode: &RGBToXYZCoefficient) -> Result<Vec<f64>> {
     if buf.len() < entries * 3 {
         return Err(Error::new(ErrorKind::Other, "Data shotage"))
     }
@@ -49,7 +60,7 @@ pub fn rgb_to_xyz_entries_f32 (buf:&[u8],entries: usize,mode: &RGBToXYZCoefficie
         let g = buf[ptr + 1];
         let b = buf[ptr + 2];
 
-        let (x,y,z) = matrix.convert_3d_u8_f32(r, g, b);
+        let (x,y,z) = matrix.convert_3d_u8_f64(r, g, b);
 
         buffer.push(x);
         buffer.push(y);
@@ -59,7 +70,7 @@ pub fn rgb_to_xyz_entries_f32 (buf:&[u8],entries: usize,mode: &RGBToXYZCoefficie
     Ok(buffer)
 }
 
-pub fn rgba_to_xyz_entries_f32 (buf:&[u8],entries: usize,mode: &RGBToXYZCoefficient) -> Result<Vec<f32>> {
+pub fn rgba_to_xyz_entries_f64 (buf:&[u8],entries: usize,mode: &RGBToXYZCoefficient) -> Result<Vec<f64>> {
     if buf.len() < entries * 4 {
         return Err(Error::new(ErrorKind::Other, "Data shotage"))
     }
@@ -72,7 +83,7 @@ pub fn rgba_to_xyz_entries_f32 (buf:&[u8],entries: usize,mode: &RGBToXYZCoeffici
         let g = buf[ptr + 1];
         let b = buf[ptr + 2];
 
-        let (x,y,z) = matrix.convert_3d_u8_f32(r, g, b);
+        let (x,y,z) = matrix.convert_3d_u8_f64(r, g, b);
 
         buffer.push(x);
         buffer.push(y);

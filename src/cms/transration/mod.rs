@@ -19,13 +19,13 @@ pub use cmykrgb::*;
 
 
 pub struct WhitePoint {
-    pub x: f32,
-    pub y: f32,
-    pub z: f32,
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
 }
 
 impl WhitePoint {
-    pub fn new(x:f32,y:f32,z:f32) -> Self {
+    pub fn new(x:f64,y:f64,z:f64) -> Self {
         Self {
             x,
             y,
@@ -54,9 +54,9 @@ impl WhitePoint {
     }
 
     pub fn from(xyz:&XYZNumber) -> Self {
-        Self{x:xyz.x.as_f32()
-            ,y:xyz.y.as_f32()
-            ,z:xyz.z.as_f32()
+        Self{x:xyz.x.as_f64()
+            ,y:xyz.y.as_f64()
+            ,z:xyz.z.as_f64()
         }
     }
 

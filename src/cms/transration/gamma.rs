@@ -4,12 +4,12 @@ pub fn transration_prametic_curve(buf:&[u8] ,entry:usize,prametic_curve:Parametr
     }
     let mut p = vec![];
     for val in prametic_curve.vals {
-        p.push(val.as_f32())
+        p.push(val.as_f64())
     }
     let mut data = vec![];
  
     for i in 0..entry {
-        let x = buf[i] as f32;
+        let x = buf[i] as f64;
         let y;
         match prametic_curve.funtion_type {
             0x000 => {
@@ -64,7 +64,7 @@ pub fn transration_prametic_curve(buf:&[u8] ,entry:usize,prametic_curve:Parametr
                 };
             _ => { y = x},
         }
-        data.push((y as i16).clamp(0,255) as u8);
+        data.push((y as i16 + 0.5).clamp(0,255) as u8);
     }
     Ok(data)
 }

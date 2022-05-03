@@ -15,19 +15,19 @@ impl XYZtoRGBCoefficient {
     pub fn get(&self) -> ColorMatrix3D {
         match self {
             XYZtoRGBCoefficient::CieRgb => {
-                ColorMatrix3D::cie_rgb_to_rgb()
+                ColorMatrix3D::cie_xyz_to_rgb()
             },
             XYZtoRGBCoefficient::SrgbD65 => {
-                ColorMatrix3D::d65_rgb_to_rgb()
+                ColorMatrix3D::d65_xyz_to_rgb()
             },
             XYZtoRGBCoefficient::SrgbC => {
-                ColorMatrix3D::c_rgb_to_rgb()
+                ColorMatrix3D::c_xyz_to_rgb()
             },
             XYZtoRGBCoefficient::AdobeRgb => {
-                ColorMatrix3D::adobe_rgb_to_rgb()
+                ColorMatrix3D::adobe_xyz_to_rgb()
             },
             XYZtoRGBCoefficient::NtscRgb => {
-                ColorMatrix3D::ntsc_rgb_to_rgb()
+                ColorMatrix3D::ntsc_xyz_to_rgb()
             },
             XYZtoRGBCoefficient::Other(matrix) => {
                 matrix.clone()
@@ -36,9 +36,16 @@ impl XYZtoRGBCoefficient {
     }
 }
 
-pub fn xyz_to_rgb(x:f32,y:f32,z:f32) -> (u8,u8,u8) {
+pub fn xyz_to_rgb_to_f64(x:f64,y:f64,z:f64) -> (f64,f64,f64) {
     let matrix = XYZtoRGBCoefficient::SrgbD65.get();
-    let (r,g,b) = matrix.convert_3d_f32_u8(x, y, z);
+    let (r,g,b) = matrix.convert_3d(x, y, z);
+    (r,g,b)
+}
+
+
+pub fn xyz_to_rgb(x:f64,y:f64,z:f64) -> (u8,u8,u8) {
+    let matrix = XYZtoRGBCoefficient::SrgbD65.get();
+    let (r,g,b) = matrix.convert_3d_f64_u8(x, y, z);
     (r,g,b)
 }
 
