@@ -1,3 +1,4 @@
+use crate::iccprofile::ICCNumber;
 use crate::Data;
 use crate::DecodedICCProfile;
 use bin_rs::io::*;
@@ -44,7 +45,7 @@ pub fn icc_profile_header_print(header: &ICCProfile) -> String {
     str += &format!("manufacturer {}\n",read_ascii_string(&header.manufacturer.to_be_bytes(),0,4));
     str += &format!("Model {:04x}\n",&header.model);
     str += &format!("Attributes {:>064b}\n",&header.attributes);
-    str += &format!("Illiuminate X:{} Y:{} Z:{}\n",&header.illuminate[0],&header.illuminate[1],&header.illuminate[2]);
+    str += &format!("Illiuminate X:{} Y:{} Z:{}\n",&header.illuminate.x.as_f64(),&header.illuminate.y.as_f64(),&header.illuminate.z.as_f64());
     str += &format!("Creator {}\n",read_ascii_string(&header.creator.to_be_bytes(),0,4));
     str += &format!("Profile ID (MD5 {:016x})\n",&header.profile_id);
     str += &format!("Data length {}bytes\n",&header.length);
@@ -158,7 +159,11 @@ pub fn decoded_print(header :&DecodedICCProfile,verbose:usize) -> Result<String>
     str += &format!("manufacturer {}\n",read_ascii_string(&header.manufacturer.to_be_bytes(),0,4));
     str += &format!("Model {:04x}\n",&header.model);
     str += &format!("Attributes {:>064b}\n",&header.attributes);
-    str += &format!("Illiuminate X:{} Y:{} Z:{}\n",&header.illuminate[0],&header.illuminate[1],&header.illuminate[2]);
+
+    let x = header.illuminate.x.as_f64();
+    let y = header.illuminate.y.as_f64();
+    let z = header.illuminate.z.as_f64();
+    str += &format!("Illiuminate X:{} Y:{} Z:{}\n",x,y,z);
     str += &format!("Creator {}\n",read_ascii_string(&header.creator.to_be_bytes(),0,4));
     str += &format!("Profile ID (MD5 {:016x})\n",&header.profile_id);
     str += &format!("Data length {}bytes\n",&header.length);

@@ -1,4 +1,4 @@
-use crate::iccprofile::IICNumber;
+use crate::iccprofile::ICCNumber;
 use crate::S15Fixed16Number;
 
 pub mod transration;
@@ -225,3 +225,4 @@ impl ColorMatrix3D {
     }
 
 }
+

@@ -95,6 +95,9 @@ pub fn cmyk_to_lab_lut16(c:u8,m:u8,y:u8,k:u8,lut:&Mft2) -> (f64,f64,f64) {
     let a = a1 as f64 * (1.0 - oa_delta) + a2 as f64 * oa_delta;
     let b = b1 as f64 * (1.0 - ob_delta) + b2 as f64 * ob_delta;
 
+    let l = l * 100.0 / 65535.0;
+    let a = a * 255.0 / 65535.0 - 127.5;
+    let b = b * 255.0 / 65535.0 - 127.5;
     (l,a,b)
 }
 
@@ -102,8 +105,8 @@ pub fn cmyk_to_lab_lut16(c:u8,m:u8,y:u8,k:u8,lut:&Mft2) -> (f64,f64,f64) {
 pub fn cmyk_to_lab_lut8(c:u8,m:u8,y:u8,k:u8,lut:&Mft1) -> (f64,f64,f64) {
     let (l,a,b) = cmyk_to_lab_lut8_u8(c ,m ,y , k,lut);
     let l = l as f64 / 255.0 * 100.0;
-    let a = a as f64 - 128.0;
-    let b = b as f64 - 128.0;
+    let a = a as f64 - 127.0;
+    let b = b as f64 - 127.0;
     
     (l,a,b)
 }

@@ -13,9 +13,9 @@ pub fn xyz_to_lab_wp(x:f64,y:f64,z:f64,wp: &WhitePoint) -> (f64,f64,f64) {
     let ti = 3.0 * th * th;
     let th_3 = th.powi(3);
 
-    let fx = if x / wp.x > th_3 { (x / wp.x).powf(1.0/3.0) } else { (x / wp.x) / ti + 4.0 / 29.0 };
-    let fy = if y / wp.y > th_3 { (y / wp.y).powf(1.0/3.0) } else { (y / wp.y) / ti + 4.0 / 29.0 };
-    let fz = if z / wp.z > th_3 { (z / wp.z).powf(1.0/3.0) } else { (z / wp.z) / ti + 4.0 / 29.0 };
+    let fx = if x / wp.x > th_3 { (x / wp.x).cbrt() } else { (x / wp.x) / ti + 4.0 / 29.0 };
+    let fy = if y / wp.y > th_3 { (y / wp.y).cbrt() } else { (y / wp.y) / ti + 4.0 / 29.0 };
+    let fz = if z / wp.z > th_3 { (z / wp.z).cbrt() } else { (z / wp.z) / ti + 4.0 / 29.0 };
 
     let l = 116.0 * fy - 16.0;
     let a = 500.0 * (fx - fy);

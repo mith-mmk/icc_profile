@@ -40,7 +40,7 @@ pub fn icc_profile_decode(data :&Vec<u8>) -> Result<DecodedICCProfile> {
         model: icc_profile.model,
         attributes: icc_profile.attributes,
         rendering_intent: icc_profile.rendering_intent,
-        illuminate :icc_profile.illuminate.clone(),
+        illuminate :icc_profile.illuminate,
         creator: icc_profile.creator,
         profile_id: icc_profile.profile_id,
         tags: decoded,
@@ -63,7 +63,7 @@ pub struct DecodedICCProfile {
     pub model: u32,
     pub attributes: u64,
     pub rendering_intent: u32,
-    pub illuminate :[u32;3],
+    pub illuminate :XYZNumber,
     pub creator: u32,
     pub profile_id: u128,
     pub tags: HashMap<String,Data>,
@@ -100,7 +100,7 @@ pub struct ICCProfile {
     pub model: u32,
     pub attributes: u64,
     pub rendering_intent: u32,
-    pub illuminate :[u32;3],
+    pub illuminate :XYZNumber,
     pub creator: u32,
     pub profile_id: u128,
     pub reserved :Vec<u8>,  // 28byte,
@@ -110,7 +110,7 @@ pub struct ICCProfile {
 impl ICCProfile {    
     pub fn new(buffer :&Vec<u8>) -> Result<Self> {
         if buffer.len() < 128 {
-            return Err(Error::new(ErrorKind::Other,"IICProfile data shotage"))
+            return Err(Error::new(ErrorKind::Other,"ICCProfile data shotage"))
         }
         let mut ptr = 0;
         let length = read_u32_be(&buffer,ptr);
@@ -151,13 +151,23 @@ impl ICCProfile {
         ptr += 8;
         let rendering_intent = read_u32_be(&buffer,ptr);
         ptr += 4;
-        let mut illuminate = [0_u32;3];
-        illuminate[0] = read_u32_be(&buffer,ptr);
+        let x = S15Fixed16Number{
+            integer: read_i16_be(buffer, ptr),
+            decimal: read_u16_be(buffer, ptr+2)
+        };    
         ptr += 4;
-        illuminate[1] = read_u32_be(&buffer,ptr);
+        let y = S15Fixed16Number{
+            integer: read_i16_be(buffer, ptr),
+            decimal: read_u16_be(buffer, ptr+2)
+        };        
         ptr += 4;
-        illuminate[2] = read_u32_be(&buffer,ptr);
+        let z = S15Fixed16Number{
+            integer: read_i16_be(buffer, ptr),
+            decimal: read_u16_be(buffer, ptr+2)
+        };        
         ptr += 4;
+        let illuminate = XYZNumber{x,y,z};
+
         let creator = read_u32_be(&buffer,ptr);
         ptr += 4;
         let profile_id = read_u128_be(&buffer, ptr);
@@ -180,7 +190,7 @@ impl ICCProfile {
             model: model,
             attributes: attributes,
             rendering_intent: rendering_intent,
-            illuminate: illuminate.clone(),
+            illuminate: illuminate,
             creator: creator,
             profile_id: profile_id,
             reserved: Vec::new(),
@@ -190,7 +200,7 @@ impl ICCProfile {
 }
 
 
-pub trait IICNumber {
+pub trait ICCNumber {
     fn as_f32(&self) -> f32;
     fn as_f64(&self) -> f64;
     fn int(&self) -> i32;
@@ -200,10 +210,10 @@ pub trait IICNumber {
 #[derive(Debug)]
 pub struct S15Fixed16Number {
     integer: i16,
-    decimal:u16,
+    decimal: u16,
 }
 
-impl IICNumber for S15Fixed16Number {
+impl ICCNumber for S15Fixed16Number {
     fn as_f32(&self) -> f32 { self.integer as f32 + self.decimal as f32 / u16::MAX as f32 }
     fn as_f64(&self) -> f64 { self.integer as f64 + self.decimal as f64 / u16::MAX as f64 }
     fn int(&self) -> i32 { self.integer as i32 }
@@ -216,7 +226,7 @@ pub struct U16Fixed16Number {
     decimal:u16,
 }
 
-impl IICNumber for U16Fixed16Number {
+impl ICCNumber for U16Fixed16Number {
     fn as_f32(&self) -> f32 { self.integer as f32 + self.decimal as f32 / u16::MAX as f32 }
     fn as_f64(&self) -> f64 { self.integer as f64 + self.decimal as f64 / u16::MAX as f64 }
     fn int(&self) -> i32 { self.integer as i32 }
@@ -228,7 +238,7 @@ pub struct U1Fixed15Number {
     decimal:u16,
 }
 
-impl IICNumber for U1Fixed15Number {
+impl ICCNumber for U1Fixed15Number {
     fn as_f32(&self) -> f32 { self.decimal as f32 / i16::MAX as f32 }
     fn as_f64(&self) -> f64 { self.decimal as f64 / i16::MAX as f64 }
     fn int(&self) -> i32 { 0 }
@@ -241,7 +251,7 @@ pub struct U8Fixed8Number {
     decimal:u8,
 }
 
-impl IICNumber for U8Fixed8Number {
+impl ICCNumber for U8Fixed8Number {
     fn as_f32(&self) -> f32 { self.integer as f32 + self.decimal as f32 / u8::MAX as f32 }
     fn as_f64(&self) -> f64 { self.integer as f64 + self.decimal as f64 / u8::MAX as f64  }
     fn int(&self) -> i32 { self.integer as i32 }

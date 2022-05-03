@@ -1,6 +1,6 @@
+use super::WhitePoint;
 use std::io::{Error,ErrorKind};
 use std::io::Result;
-use super::WhitePoint;
 
 pub fn lab_to_xyz(l:f64,a:f64,b:f64) -> (f64,f64,f64) {
     lab_to_xyz_wp(l,a,b,&WhitePoint::d65())
