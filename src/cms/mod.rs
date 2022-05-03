@@ -184,7 +184,7 @@ impl ColorMatrix3D {
         (a,b,c)
     }
 
-    pub fn convert_3d_u16(&self,x:u16,y:u16,z:u16) -> (u16,u16,u16) {
+    pub fn convert_3d_f32_u8(&self,x:f32,y:f32,z:f32) -> (u8,u8,u8) {
         let e = self.e;
         let (x,y,z) = (x as f32,y as f32,z as f32);
         
@@ -192,9 +192,20 @@ impl ColorMatrix3D {
         let b = x * e[3] + y * e[4] + z * e[5];    
         let c = x * e[6] + y * e[7] + z * e[8];    
         
-        let a = (a as i32).clamp(0,65535) as u16;
-        let b = (b as i32).clamp(0,65535) as u16;
-        let c = (c as i32).clamp(0,65535) as u16;
+        let a = (a as i16).clamp(0,255) as u8;
+        let b = (b as i16).clamp(0,255) as u8;
+        let c = (c as i16).clamp(0,255) as u8;
+        (a,b,c)
+    }
+
+    pub fn convert_3d_u8_f32(&self,x:u8,y:u8,z:u8) -> (f32,f32,f32) {
+        let e = self.e;
+        let (x,y,z) = (x as f32/255.0,y as f32/255.0,z as f32/255.0);
+        
+        let a = x * e[0] + y * e[1] + z * e[2];    
+        let b = x * e[3] + y * e[4] + z * e[5];    
+        let c = x * e[6] + y * e[7] + z * e[8];    
+        
         (a,b,c)
     }
 

@@ -36,7 +36,54 @@ impl RGBToXYZCoefficient {
     }
 }
 
-pub fn rgb_to_xyz_entries (buf:&[u8],entries: usize,mode: &RGBToXYZCoefficient) -> Result<Vec<u8>> {
+pub fn rgb_to_xyz_entries_f32 (buf:&[u8],entries: usize,mode: &RGBToXYZCoefficient) -> Result<Vec<f32>> {
+    if buf.len() < entries * 3 {
+        return Err(Error::new(ErrorKind::Other, "Data shotage"))
+    }
+    let matrix = mode.get();
+    let mut buffer = Vec::with_capacity(entries * 3);
+
+    for i in 0..entries {
+        let ptr = i * 3;
+        let r = buf[ptr];
+        let g = buf[ptr + 1];
+        let b = buf[ptr + 2];
+
+        let (x,y,z) = matrix.convert_3d_u8_f32(r, g, b);
+
+        buffer.push(x);
+        buffer.push(y);
+        buffer.push(z);
+    }
+
+    Ok(buffer)
+}
+
+pub fn rgba_to_xyz_entries_f32 (buf:&[u8],entries: usize,mode: &RGBToXYZCoefficient) -> Result<Vec<f32>> {
+    if buf.len() < entries * 4 {
+        return Err(Error::new(ErrorKind::Other, "Data shotage"))
+    }
+    let matrix = mode.get();
+    let mut buffer = Vec::with_capacity(entries * 3);
+
+    for i in 0..entries {
+        let ptr = i * 4;
+        let r = buf[ptr];
+        let g = buf[ptr + 1];
+        let b = buf[ptr + 2];
+
+        let (x,y,z) = matrix.convert_3d_u8_f32(r, g, b);
+
+        buffer.push(x);
+        buffer.push(y);
+        buffer.push(z);
+    }
+
+    Ok(buffer)
+}
+
+
+pub fn rgb_to_xyz_entries(buf:&[u8],entries: usize,mode: &RGBToXYZCoefficient) -> Result<Vec<u8>> {
     if buf.len() < entries * 3 {
         return Err(Error::new(ErrorKind::Other, "Data shotage"))
     }
@@ -78,7 +125,6 @@ pub fn rgba_to_xyz_entries (buf:&[u8],entries: usize,mode: &RGBToXYZCoefficient)
         buffer.push(y);
         buffer.push(z);
     }
-
 
     Ok(buffer)
 }

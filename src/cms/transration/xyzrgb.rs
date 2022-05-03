@@ -36,6 +36,12 @@ impl XYZtoRGBCoefficient {
     }
 }
 
+pub fn xyz_to_rgb(x:f32,y:f32,z:f32) -> (u8,u8,u8) {
+    let matrix = XYZtoRGBCoefficient::SrgbD65.get();
+    let (r,g,b) = matrix.convert_3d_f32_u8(x, y, z);
+    (r,g,b)
+}
+
 
 pub fn xyz_to_rgb_entries (buf:&[u8],entries: usize,mode: &XYZtoRGBCoefficient) -> Result<Vec<u8>> {
     if buf.len() < entries *3 {
