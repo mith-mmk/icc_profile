@@ -304,13 +304,13 @@ pub enum Curve {
 }
 
 impl Curve {
-    pub fn len(&self) -> usize {
+    pub fn as_size(&self) -> usize {
         match self {
             Curve::Curve(curve) => {
                 curve.len() * 2 + 12
             },
             Curve::ParametricCurve(curve) => {
-                curve.len() + 8
+                curve.as_size() + 8
             }
         }
     }
@@ -420,7 +420,7 @@ pub struct ParametricCurve {
 }
 
 impl ParametricCurve {
-    pub fn len(&self) -> usize {
+    pub fn as_size(&self) -> usize {
         self.vals.len() * 4 + 4
     }
 }
@@ -1146,7 +1146,7 @@ impl Data {
                 let mut ptr = offset_b_curve;
                 for _ in 0..input_channels {
                     let b_curve = Self::read_parmetic_curve(&data[ptr..])?;
-                    ptr += b_curve.len();
+                    ptr += b_curve.as_size();
                     b_curves.push(b_curve);
                 }
                 let mut ptr = offset_matrix;
@@ -1162,7 +1162,7 @@ impl Data {
                 let mut ptr = offset_m_curve;
                 for _ in 0..input_channels {
                     let m_curve = Self::read_parmetic_curve(&data[ptr..])?;
-                    ptr += m_curve.len();
+                    ptr += m_curve.as_size();
                     m_curves.push(m_curve);
                 }
                 let mut ptr = offset_clut;
@@ -1209,7 +1209,7 @@ impl Data {
                 let mut ptr = offset_a_curve;
                 for _ in 0..input_channels {
                     let a_curve = Self::read_parmetic_curve(&data[ptr..])?;
-                    ptr += a_curve.len();
+                    ptr += a_curve.as_size();
                     a_curves.push(a_curve);
                 }
                 if data_type == "mBA " {
@@ -1615,8 +1615,8 @@ impl Data {
                 }
                 str.to_string()
             },
-            ParametricCurve(prametic_curve) => {
-                let mut str = match prametic_curve.funtion_type {
+            ParametricCurve(parametic_curve) => {
+                let mut str = match parametic_curve.funtion_type {
                     0x000 => {"function Y = X**ganma\n"},
                     0x001 => {"function Y = (aX+b)**ganma (X >= -b/a), Y = 0 (X < -b/a)\n"},
                     0x002 => {"function Y = (aX+b)**ganma + c(X >= -b/a), Y = c (X < -b/a)\n"},
@@ -1624,7 +1624,7 @@ impl Data {
                     0x004 => {"function Y = (aX+b)**ganma + e(X >= d), Y = cX + f (X < d)\n"},
                     _ => {"function Unknown"},
                 }.to_string();
-                for f in &prametic_curve.vals {
+                for f in &parametic_curve.vals {
                     str += &f.as_f32().to_string();
                     str += " ";
                 }
@@ -1892,7 +1892,7 @@ impl Data {
                 if verbose > 0 {
                     str += &format!("{:?} Precision {} {:?}\n",clut.grid_points,clut.precision,clut.clut_data);
                 } else {
-                    str += &format!("{:?} Precision {} CLUT {}bytes\n",clut.grid_points,clut.precision,clut.len());
+                    str += &format!("{:?} Precision {} CLUT {} entries\n",clut.grid_points,clut.precision,clut.len());
                 }
 
                 str += "A Curves\n";
@@ -1932,7 +1932,7 @@ impl Data {
                 if verbose > 0 {
                     str += &format!("{:?} Precision {} {:?}\n",clut.grid_points,clut.precision,clut.clut_data);
                 } else {
-                    str += &format!("{:?} Precision {} CLUT {}bytes\n",clut.grid_points,clut.precision,clut.len());
+                    str += &format!("{:?} Precision {} CLUT {} entries\n",clut.grid_points,clut.precision,clut.len());
                 }
 
                 str += "A Curves\n";
