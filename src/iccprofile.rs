@@ -1,3 +1,5 @@
+//! ICC Profile reader
+
 use std::collections::HashMap;
 use std::io::{Error,ErrorKind};
 use std::io::Result;
@@ -296,16 +298,74 @@ pub struct Mft2 {
 }
 
 #[derive(Debug)]
+pub enum Curve {
+    ParametricCurve(ParametricCurve),
+    Curve(Vec<u16>),
+}
+
+impl Curve {
+    pub fn len(&self) -> usize {
+        match self {
+            Curve::Curve(curve) => {
+                curve.len() * 2 + 12
+            },
+            Curve::ParametricCurve(curve) => {
+                curve.len() + 8
+            }
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            Curve::Curve(curve) => {
+                format!("Curve Type\n{:?}\n",curve)
+            },
+            Curve::ParametricCurve(curve) => {
+                let mut str = "Parametic Curve Type\n".to_string();
+                str += &match curve.funtion_type {
+                    0x000 => {"function Y = X**ganma\n"},
+                    0x001 => {"function Y = (aX+b)**ganma (X >= -b/a), Y = 0 (X < -b/a)\n"},
+                    0x002 => {"function Y = (aX+b)**ganma + c(X >= -b/a), Y = c (X < -b/a)\n"},
+                    0x003 => {"function Y = (aX+b)**ganma (X >= d), Y = cX (X < d)\n"},
+                    0x004 => {"function Y = (aX+b)**ganma + e(X >= d), Y = cX + f (X < d)\n"},
+                    _ => {"function Unknown"},
+                }.to_string();
+                for f in &curve.vals {
+                    str += &f.as_f32().to_string();
+                    str += " ";
+                }
+                str += "\n";
+                str
+           }
+        }
+    }
+}
+
+#[derive(Debug)]
 pub enum Clut {
     UInt8(Vec<u8>),
     UInt16(Vec<u16>),
 }
 
+
 #[derive(Debug)]
-pub struct MbaClut {
+pub struct MClut {
     grid_points: Vec<u8>,   // max 16
     precision: u8,
     clut_data: Clut,
+}
+
+impl MClut {
+    pub fn len(&self) -> usize {
+        match &self.clut_data {
+            Clut::UInt16(clut) => {
+                clut.len()
+            },
+            Clut::UInt8(clut) => {
+                clut.len()
+            }
+        }
+    }
 }
 
 
@@ -313,12 +373,22 @@ pub struct MbaClut {
 pub struct Mba {
     pub input_channels :u8,
     pub output_channels:u8,
-    pub b_curves: Vec<ParametricCurve>,
+    pub b_curves: Vec<Curve>,
     pub matrix: Vec<S15Fixed16Number>,
-    pub m_curves: Vec<ParametricCurve>,
-    pub clut: MbaClut,
-    pub a_curves: Vec<ParametricCurve>,
+    pub m_curves: Vec<Curve>,
+    pub clut: MClut,
+    pub a_curves: Vec<Curve>,
+}
 
+#[derive(Debug)]
+pub struct Mab {
+    pub input_channels :u8,
+    pub output_channels:u8,
+    pub b_curves: Vec<Curve>,
+    pub matrix: Vec<S15Fixed16Number>,
+    pub m_curves: Vec<Curve>,
+    pub clut: MClut,
+    pub a_curves: Vec<Curve>,
 }
 
 #[derive(Debug)]
@@ -351,7 +421,7 @@ pub struct ParametricCurve {
 
 impl ParametricCurve {
     pub fn len(&self) -> usize {
-        self.vals.len() * 4 + 2
+        self.vals.len() * 4 + 4
     }
 }
 
@@ -583,6 +653,7 @@ pub enum Data {
     SampledCurve(Vec<f32>),
     NamedColor(NamedColor2Type),
     Descriptor(Descriptor),
+    LutAtoB(Mab),
     LutBtoA(Mba),
     ResponseCurveSet16(ResponseCurveSet16),
     CrdInfo(Vec<String>),
@@ -614,8 +685,23 @@ impl Data {
         Ok((data_type.clone(),Self::get(&data_type,data,length,version)?))
     }
 
-    fn read_parmetic_curve(data:&[u8]) -> Result<ParametricCurve> {
-        bound_check(data,0,4)?;
+    fn read_parmetic_curve(data:&[u8]) -> Result<Curve> {
+        bound_check(data,0,12)?;
+        let data_type = Self::read_data_type(data,0)?;
+        if data_type != "para" {
+            let mut ptr = 8;
+            bound_check(data, ptr, 4)?;
+            let mut curv = vec![];
+            let count = read_u32_be(data, ptr) as usize;
+            ptr += 4;
+            bound_check(data, ptr, count * 2)?;
+            for _ in 0..count {
+                curv.push(read_u16_be(data, ptr));
+                ptr += 2;
+            }
+            return Ok(Curve::Curve(curv))
+        }
+
         let mut ptr = 8;
         let funtion_type = read_u16_be(data,ptr);
         ptr += 4;
@@ -649,7 +735,7 @@ impl Data {
             });
             ptr += 4;
         }
-        Ok(ParametricCurve{funtion_type,vals})
+        Ok(Curve::ParametricCurve(ParametricCurve{funtion_type,vals}))
     }
 
     fn read_formula_curve(data:&[u8]) -> Result<FormulaCurve> {
@@ -735,7 +821,12 @@ impl Data {
         bound_check(data,ptr, len)?;
         match data_type {
             "para" => {
-                Ok(ParametricCurve(Self::read_parmetic_curve(data)?))
+                let curve = Self::read_parmetic_curve(data)?;
+                if let Curve::ParametricCurve(p_curve) = curve {
+                    Ok(ParametricCurve(p_curve))
+                } else {
+                    Ok(None)
+                }
             },
             "parf" => {
                 Ok(FormulaCurve(Self::read_formula_curve(data)?))
@@ -1029,7 +1120,7 @@ impl Data {
                     Ok(Lut16(mft))
                 }
             },
-            "mBA " => { // no sample 4.0
+            "mBA " | "mAB " => { // no sample 4.0
                 bound_check(data, ptr,32)?;
 
                 let input_channels= read_byte(data, ptr);
@@ -1051,7 +1142,6 @@ impl Data {
                 let mut m_curves = vec![];
                 let mut a_curves = vec![];
                 let mut matrix = vec![];
-                let clut = vec![];
 
                 let mut ptr = offset_b_curve;
                 for _ in 0..input_channels {
@@ -1080,33 +1170,37 @@ impl Data {
 
                 let mut grid_points = vec![];
                 let mut clut_size = output_channels as usize;
-                for _ in 0..16 {
-                    let grid_point = read_byte(&data,ptr);
-                    clut_size *= grid_point as usize;
+                for i in 0..16 {
+                    let grid_point = read_byte(&data,ptr+i);
+                    if grid_point > 0 {
+                        clut_size *= grid_point as usize;
+                    } else {
+                        break;
+                    }
                     grid_points.push(grid_point);
-                    ptr += 1;
                 }
+                ptr += 16;
                 let precision = read_byte(&data,ptr);
-                ptr += 1;
+                ptr += 4;   // with padding
                 let clut_data = if precision == 1 {
-                    let mut clut_entries = vec![];
+                    let mut clut_entries:Vec<u8> = vec![];
                     bound_check(data, ptr,clut_size)?;
                     for _ in 0..clut_size {
                         clut_entries.push(read_byte(data, ptr));
                         ptr += 1;
                     }
-                    Clut::UInt8(clut)
+                    Clut::UInt8(clut_entries)
                 } else {
-                    let mut clut_entries = vec![];
+                    let mut clut_entries:Vec<u16> = vec![];
                     bound_check(data, ptr,clut_size * 2)?;
                     for _ in 0..clut_size {
                         clut_entries.push(read_u16_be(data, ptr));
                         ptr += 2;
                     }
-                    Clut::UInt8(clut)
+                    Clut::UInt16(clut_entries)
                 };
 
-                let clut = MbaClut {
+                let clut = MClut {
                     grid_points,
                     precision,
                     clut_data,
@@ -1118,15 +1212,29 @@ impl Data {
                     ptr += a_curve.len();
                     a_curves.push(a_curve);
                 }
-                Ok(LutBtoA(Mba{
-                    input_channels,
-                    output_channels,
-                    b_curves,
-                    matrix,
-                    m_curves,
-                    clut,
-                    a_curves,
-                }))
+                if data_type == "mBA " {
+
+                    Ok(LutBtoA(Mba{
+                        input_channels,
+                        output_channels,
+                        b_curves,
+                        matrix,
+                        m_curves,
+                        clut,
+                        a_curves,
+                    }))
+                } else {
+                    Ok(LutAtoB(Mab{
+                        input_channels,
+                        output_channels,
+                        b_curves,
+                        matrix,
+                        m_curves,
+                        clut,
+                        a_curves,
+                    }))
+
+                }
             },
             "rcs2" => {
                 bound_check(data, ptr, 4)?;
@@ -1470,7 +1578,6 @@ impl Data {
                 // "fl32" // 5.0
                 // "fl64" // 5.0
                 // "gbd " // 5.0
-                // "mAB " // 5.0
                 // "smat" // 5.0
                 // "svcn" // 5.0
                 // "tary" // 5.0
@@ -1761,20 +1868,9 @@ impl Data {
 
                 str += "B Curves\n";
 
+
                 for curve in &lut.b_curves {
-                    let mut str = match curve.funtion_type {
-                        0x000 => {"function Y = X**ganma\n"},
-                        0x001 => {"function Y = (aX+b)**ganma (X >= -b/a), Y = 0 (X < -b/a)\n"},
-                        0x002 => {"function Y = (aX+b)**ganma + c(X >= -b/a), Y = c (X < -b/a)\n"},
-                        0x003 => {"function Y = (aX+b)**ganma (X >= d), Y = cX (X < d)\n"},
-                        0x004 => {"function Y = (aX+b)**ganma + e(X >= d), Y = cX + f (X < d)\n"},
-                        _ => {"function Unknown"},
-                    }.to_string();
-                    for f in &curve.vals {
-                        str += &f.as_f32().to_string();
-                        str += " ";
-                    }
-                    str += "\n";
+                    str += &curve.to_string();
                 }
 
                 let e = &lut.matrix;
@@ -1788,40 +1884,60 @@ impl Data {
 
                 str += "M Curves\n";
                 for curve in &lut.m_curves {
-                    let mut str = match curve.funtion_type {
-                        0x000 => {"function Y = X**ganma\n"},
-                        0x001 => {"function Y = (aX+b)**ganma (X >= -b/a), Y = 0 (X < -b/a)\n"},
-                        0x002 => {"function Y = (aX+b)**ganma + c(X >= -b/a), Y = c (X < -b/a)\n"},
-                        0x003 => {"function Y = (aX+b)**ganma (X >= d), Y = cX (X < d)\n"},
-                        0x004 => {"function Y = (aX+b)**ganma + e(X >= d), Y = cX + f (X < d)\n"},
-                        _ => {"function Unknown"},
-                    }.to_string();
-                    for f in &curve.vals {
-                        str += &f.as_f32().to_string();
-                        str += " ";
-                    }
-                    str += "\n";
+                    str += &curve.to_string();
                 }
 
                 str += "CLUT\n";
                 let clut = &lut.clut;
-                str += &format!("{} {} {:?}",clut.grid_points.len(),clut.precision,clut.clut_data);
+                if verbose > 0 {
+                    str += &format!("{:?} Precision {} {:?}\n",clut.grid_points,clut.precision,clut.clut_data);
+                } else {
+                    str += &format!("{:?} Precision {} CLUT {}bytes\n",clut.grid_points,clut.precision,clut.len());
+                }
 
                 str += "A Curves\n";
                 for curve in &lut.m_curves {
-                    let mut str = match curve.funtion_type {
-                        0x000 => {"function Y = X**ganma\n"},
-                        0x001 => {"function Y = (aX+b)**ganma (X >= -b/a), Y = 0 (X < -b/a)\n"},
-                        0x002 => {"function Y = (aX+b)**ganma + c(X >= -b/a), Y = c (X < -b/a)\n"},
-                        0x003 => {"function Y = (aX+b)**ganma (X >= d), Y = cX (X < d)\n"},
-                        0x004 => {"function Y = (aX+b)**ganma + e(X >= d), Y = cX + f (X < d)\n"},
-                        _ => {"function Unknown"},
-                    }.to_string();
-                    for f in &curve.vals {
-                        str += &f.as_f32().to_string();
-                        str += " ";
-                    }
-                    str += "\n";
+                    str += &curve.to_string();
+                }
+
+                str.to_string()
+            },
+            LutAtoB(lut) => {
+                let mut str = format!("Lut A to B input #{} output #{}\n",
+                    lut.input_channels, lut.output_channels);
+
+                str += "B Curves\n";
+
+
+                for curve in &lut.b_curves {
+                    str += &curve.to_string();
+                }
+
+                let e = &lut.matrix;
+                str += "Matrix\n";
+
+                if e.len() >= 12 {
+                    str += &format!("|{} {} {}| |{}|\n",e[0].as_f32(),e[1].as_f32(),e[2].as_f32(),e[9].as_f32() );
+                    str += &format!("|{} {} {}| |{}|\n",e[3].as_f32(),e[4].as_f32(),e[5].as_f32(),e[10].as_f32());
+                    str += &format!("|{} {} {}| |{}|\n",e[6].as_f32(),e[7].as_f32(),e[8].as_f32(),e[11].as_f32());
+                }
+
+                str += "M Curves\n";
+                for curve in &lut.m_curves {
+                    str += &curve.to_string();
+                }
+
+                let clut = &lut.clut;
+
+                if verbose > 0 {
+                    str += &format!("{:?} Precision {} {:?}\n",clut.grid_points,clut.precision,clut.clut_data);
+                } else {
+                    str += &format!("{:?} Precision {} CLUT {}bytes\n",clut.grid_points,clut.precision,clut.len());
+                }
+
+                str += "A Curves\n";
+                for curve in &lut.m_curves {
+                    str += &curve.to_string();
                 }
 
                 str.to_string()
@@ -1848,6 +1964,7 @@ impl Data {
             }
         }
     }
+
 
     pub fn xyz_number(data: &[u8],ptr: usize) ->  Result<XYZNumber> {
         bound_check(data, ptr, 12)?;

@@ -1,3 +1,6 @@
+//! Color space Management System
+
+
 use crate::iccprofile::ICCNumber;
 use crate::S15Fixed16Number;
 

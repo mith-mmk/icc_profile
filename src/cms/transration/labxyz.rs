@@ -61,9 +61,9 @@ pub fn lab_to_xyz_entries(buf:&[u8],entries: usize,wp: &WhitePoint)  -> Result<V
         let b = buf[ptr + 2] as f64 - 128.0;
         let (x,y,z) = lab_to_xyz_wp(l,a,b,wp);
 
-        let x = ((x * 255.0) as i16).clamp(0,255) as u8;
-        let y = ((y * 255.0) as i16).clamp(0,255) as u8;
-        let z = ((z * 255.0) as i16).clamp(0,255) as u8;
+        let x = ((x * 255.0 + 0.5) as i16).clamp(0,255) as u8;
+        let y = ((y * 255.0 + 0.5) as i16).clamp(0,255) as u8;
+        let z = ((z * 255.0 + 0.5) as i16).clamp(0,255) as u8;
 
         buffer.push(x);
         buffer.push(y);
