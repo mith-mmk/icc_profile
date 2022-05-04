@@ -251,13 +251,10 @@ pub fn d3_to_d4_lut8(c1:u8,c2:u8,c3:u8,lut:&Mft1) -> (u8,u8,u8,u8) {
     let d3 = lut.clut_values[grid+2] as f64 * (1.0  -grid_delta) + lut.clut_values[grid2+2] as f64 * grid_delta;
     let d4 = lut.clut_values[grid+3] as f64 * (1.0  -grid_delta) + lut.clut_values[grid2+3] as f64 * grid_delta;
 
-    println!("step3 {} {} {} {}",d1,d2,d3,d4);
-
     let d1 = lut.output_table[(d1 as usize).clamp(0,255)];
     let d2 = lut.output_table[(d2 as usize).clamp(0,255) + 256];
     let d3 = lut.output_table[(d3 as usize).clamp(0,255) + 512];
     let d4 = lut.output_table[(d4 as usize).clamp(0,255) + 768];
-    println!("step4 {} {} {} {}",d1,d2,d3,d4);
 
     (d1,d2,d3,d4)
 }
