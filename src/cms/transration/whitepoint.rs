@@ -45,7 +45,7 @@ impl WhitePoint {
     }
 
     pub fn icc() -> Self {
-        Self{x:0.9642, y:1.000, z:0.8249}
+        Self{x:1.0371292263, y:1.000, z:0.8249}
     }
 
     pub fn from_profile(decoded:&DecodedICCProfile) -> Self {
