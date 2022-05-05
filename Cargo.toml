@@ -2,7 +2,7 @@
 name = "icc-profile"
 version = "0.0.2"
 edition = "2021"
-license = "MIT"
+license = "MIT OR Apache-2.0"
 description = "ICC Profile reader"
 readme = "README.md"
 authors = ["mith-mmk <47620686+mith-mmk@users.noreply.github.com>"]
