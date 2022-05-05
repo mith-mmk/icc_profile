@@ -16,6 +16,9 @@ pub fn main() -> std::io::Result<()> {
     Ok(())
 }
 ```
+
+## Todo
+- ICC Profile 4.x ,5.x tags full support.
 ## License
 
 Licensed under either of

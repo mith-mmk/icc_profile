@@ -50,6 +50,19 @@ impl YUVToRGBCoefficient {
     }
 }
 
+
+/// (Y,Cb,Cr) -> (R, G, B)
+pub fn yuv_to_rgb (y:u8,cb:u8,cr:u8) -> (u8,u8,u8) {
+    let matrix = YUVToRGBCoefficient::Bt601.get();
+    matrix.convert_3d_u8(y, cb, cr) 
+}
+
+pub fn yuv_to_rgb_with_mode (y:u8,cb:u8,cr:u8,mode: &YUVToRGBCoefficient) -> (u8,u8,u8) {
+    let matrix = mode.get();
+    matrix.convert_3d_u8(y, cb, cr) 
+}
+
+
 pub fn yuv_to_rgb_entries (buf:&[u8],entries: usize,mode: &YUVToRGBCoefficient) -> Result<Vec<u8>> {
     if buf.len() < entries *3 {
         return Err(Error::new(ErrorKind::Other, "Data shotage"))
@@ -61,10 +74,10 @@ pub fn yuv_to_rgb_entries (buf:&[u8],entries: usize,mode: &YUVToRGBCoefficient) 
     for i in 0..entries {
         let ptr = i * 3;
         let y  = buf[ptr];
-        let cr = buf[ptr + 1];
-        let cb = buf[ptr + 2];
+        let cb = buf[ptr + 1];
+        let cr = buf[ptr + 2];
 
-        let (r,g,b) = matrix.convert_3d_u8(y, cr, cb);
+        let (r,g,b) = matrix.convert_3d_u8(y, cb, cr);
 
         buffer.push(r);
         buffer.push(g);
@@ -84,10 +97,10 @@ pub fn yuv_to_rgba_entries (buf:&[u8],entries: usize,mode: &YUVToRGBCoefficient)
     for i in 0..entries {
         let ptr = i * 3;
         let y  = buf[ptr];
-        let cr = buf[ptr + 1];
-        let cb = buf[ptr + 2];
+        let cb = buf[ptr + 1];
+        let cr = buf[ptr + 2];
 
-        let (r,g,b) = matrix.convert_3d_u8(y, cr, cb);
+        let (r,g,b) = matrix.convert_3d_u8(y, cb, cr);
 
         buffer.push(r);
         buffer.push(g);

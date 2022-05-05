@@ -1,6 +1,6 @@
 // icc profile reader
 use icc_profile::utils::decoded_print;
-pub use icc_profile::iccprofile::*;
+use icc_profile::iccprofile::*;
 
 use std::env;
 

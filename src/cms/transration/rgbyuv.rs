@@ -39,6 +39,17 @@ impl RGBToYUVCoefficient {
 
 }
 
+/// (R,G,B) -> (Y,Cb,Cr)
+pub fn rgb_to_yuv(r:u8,g:u8,b:u8) -> (u8,u8,u8) {
+    let matrix = RGBToYUVCoefficient::Bt601.get();
+    matrix.convert_3d_u8(r, g, b) 
+}
+
+pub fn rgb_to_yuv_with_mode(r:u8,g:u8,b:u8,mode: &RGBToYUVCoefficient) -> (u8,u8,u8) {
+    let matrix = mode.get();
+    matrix.convert_3d_u8(r, g, b) 
+}
+
 
 pub fn rgb_to_yuv_entries (buf:&[u8],entries: usize,mode: &RGBToYUVCoefficient) -> Result<Vec<u8>> {
     if buf.len() < entries *3 {

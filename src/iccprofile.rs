@@ -106,7 +106,7 @@ pub struct ICCProfile {
     pub creator: u32,
     pub profile_id: u128,
     pub reserved :Vec<u8>,  // 28byte,
-    pub data: Vec<u8>   // left data
+    pub data: Vec<u8>   // raw data
 }
 
 impl ICCProfile {    
@@ -273,6 +273,7 @@ impl XYZNumber {
     }
 }
 
+/// Mft1 is Lut8 type
 #[derive(Debug)]
 pub struct Mft1 {
     pub input_channels :u8,
@@ -284,6 +285,7 @@ pub struct Mft1 {
     pub output_table: Vec<u8>,
 }
 
+/// Mft2 is Lut16 type
 #[derive(Debug)]
 pub struct Mft2 {
     pub input_channels :u8,
@@ -297,6 +299,7 @@ pub struct Mft2 {
     pub output_table: Vec<u16>, 
 }
 
+/// enum Curve is for LutAtoB type and LutBtoA type
 #[derive(Debug)]
 pub enum Curve {
     ParametricCurve(ParametricCurve),
@@ -341,6 +344,7 @@ impl Curve {
     }
 }
 
+/// enum Clut is for LutAtoB type and LutBtoA type
 #[derive(Debug)]
 pub enum Clut {
     UInt8(Vec<u8>),
@@ -369,6 +373,7 @@ impl MClut {
 }
 
 
+/// Mba is LutBtoA type
 #[derive(Debug)]
 pub struct Mba {
     pub input_channels :u8,
@@ -380,6 +385,7 @@ pub struct Mba {
     pub a_curves: Vec<Curve>,
 }
 
+/// Mab is LutAtoB type
 #[derive(Debug)]
 pub struct Mab {
     pub input_channels :u8,
@@ -400,23 +406,23 @@ pub struct ResponseCurveSet16 {
 
 #[derive(Debug)]
 pub struct Response16Number {
-    encoding_the_interval: u16,
+    pub encoding_the_interval: u16,
     reserved: u16,
-    measurement_value:S15Fixed16Number
+    pub measurement_value:S15Fixed16Number
 }
 
 #[derive(Debug)]
 pub struct CurveStructure {
-    signature: u32,
-    for_each_channel:Vec<u32>,
-    patch_with_the_maximum_colorant_value:Vec<XYZNumber>,
-    response_arrays:Vec<Response16Number>,
+    pub signature: u32,
+    pub for_each_channel:Vec<u32>,
+    pub patch_with_the_maximum_colorant_value:Vec<XYZNumber>,
+    pub response_arrays:Vec<Response16Number>,
 }
 
 #[derive(Debug)]
 pub struct ParametricCurve {
-    funtion_type:u16,
-    vals:Vec<S15Fixed16Number>,
+    pub funtion_type:u16,
+    pub vals:Vec<S15Fixed16Number>,
 }
 
 impl ParametricCurve {
@@ -432,19 +438,19 @@ pub struct FormulaCurve {
 }
 
 impl FormulaCurve {
-    pub fn len(&self) -> usize {
+    pub fn as_size(&self) -> usize {
         self.vals.len() * 4 + 2
     }
 }
 
 #[derive(Debug)]
 pub struct DateTime{
-    year: u32,
-    month: u32,
-    day: u32,
-    hour: u32,
-    minutes: u32,
-    second: u32,
+    pub year: u32,
+    pub month: u32,
+    pub day: u32,
+    pub hour: u32,
+    pub minutes: u32,
+    pub second: u32,
 }
 
 impl DateTime{

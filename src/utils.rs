@@ -1,5 +1,4 @@
 use crate::iccprofile::ICCNumber;
-use crate::Data;
 use crate::DecodedICCProfile;
 use bin_rs::io::*;
 use crate::ICCProfile;
@@ -54,92 +53,8 @@ pub fn icc_profile_header_print(header: &ICCProfile) -> String {
 
 
 pub fn icc_profile_print(icc_profile :&ICCProfile,verbose:usize) -> Result<String> {
-    let mut str = icc_profile_header_print(&icc_profile);
-    let header_size = 128;
-    let mut ptr = header_size;
-    str += "==== ICC Profiles defined data ====\n";
-    let tags = read_u32_be(&icc_profile.data,ptr);
-    ptr +=  4;
-    str += &format!("Tags {}\n",tags);
-
-    for _ in 0..tags {
-        let tag_name = read_string(&icc_profile.data,ptr,4);
-        ptr +=  4;
-        let tag_offset = read_u32_be(&icc_profile.data,ptr) as usize;
-        ptr +=  4;
-        let tag_length = read_u32_be(&icc_profile.data,ptr) as usize;
-        ptr +=  4;
-        str +=  &format!("Tag name {} {}bytes\n",tag_name,tag_length);
-        match &*tag_name {
-            "A2B0" | "A2B1" | "A2B2" | "B2A0" | "B2A1" | "B2A2" => {
-                let ptr = tag_offset;
-                let (data_type,val) = Data::parse(&icc_profile.data[ptr..],tag_length,icc_profile.version)?;
-                str += &format!("LUT Table - data_type:{}\n",data_type);
-                str += &val.as_string(verbose);
-                str += "\n";
-            },
-            "chad" => {
-                let ptr = tag_offset;
-                let (data_type,val) = Data::parse(&icc_profile.data[ptr..],tag_length,icc_profile.version)?;
-                str += &format!("Conversion D65 to D50 - data_type:{}\n",data_type);
-                str += &val.as_string(verbose);
-                str += "\n";
-            },
-            "bkpt" => {
-                let ptr = tag_offset;
-                let (data_type,val) = Data::parse(&icc_profile.data[ptr..],tag_length,icc_profile.version)?;
-                str += &format!("Media Black Point - data_type:{}\n",data_type);
-                str += &val.as_string(verbose);
-                str += "\n\n";
-            },
-
-            "bXYZ" | "gXYZ" | "rXYZ" => {
-                str += "rgb XYZ Tag ";
-                let ptr = tag_offset;
-                let (data_type,val) = Data::parse(&icc_profile.data[ptr..],tag_length,icc_profile.version)?;
-                str += &format!("data_type:{}\n",data_type);
-                str += &val.as_string(verbose);
-                str += "\n";
-            },
-            "bTRC" | "gTRC" | "rTRC"=> { // bTRC
-                let ptr = tag_offset;
-                let (data_type,val) = Data::parse(&icc_profile.data[ptr..],tag_length,icc_profile.version)?;
-                str += &format!("Color tone reproduction curve - data_type:{}\n",data_type);
-                str += &val.as_string(verbose);
-                str += "\n\n";
-            },
-            "desc" => {
-                let ptr = tag_offset;
-                let (data_type,val) = Data::parse(&icc_profile.data[ptr..],tag_length,icc_profile.version)?;
-                str += &format!("desc - data_type:{}\n",data_type);
-                str += &val.as_string(verbose);
-                str += "\n\n";
-            },
-            "cprt" => {
-                let ptr = tag_offset;
-                let (data_type,val) = Data::parse(&icc_profile.data[ptr..],tag_length,icc_profile.version)?;
-                str += &format!("cprt - data_type:{}\n",data_type);
-                str += &val.as_string(verbose);
-                str += "\n\n";
-            },
-            "wtpt" => {
-                let ptr = tag_offset;
-                let (data_type,val) = Data::parse(&icc_profile.data[ptr..],tag_length,icc_profile.version)?;
-                str += &format!("Media white point - data_type:{}\n",data_type);
-                str += &val.as_string(verbose);
-                str += "\n";
-            },
-            _ => {
-                let ptr = tag_offset;
-                let (data_type,val) = Data::parse(&icc_profile.data[ptr..],tag_length,icc_profile.version)?;
-                str += &format!("{} - data_type:{}\n",tag_name,data_type);
-                str += &val.as_string(verbose);
-                str += "\n";
-            },
-
-        }
-    }
-    Ok(str)
+    let decoded = DecodedICCProfile::new(&icc_profile.data)?;
+    decoded_print(&decoded,verbose)
 }
 
 /// decoded_print to String ICC Profile data
